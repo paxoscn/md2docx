@@ -1,0 +1,73 @@
+[package]
+name = "md2docx-converter"
+version = "0.1.0"
+edition = "2021"
+authors = ["Your Name <your.email@example.com>"]
+description = "A configurable Markdown to docx converter with web API, CLI, and web interface"
+license = "MIT"
+repository = "https://github.com/yourusername/md2docx-converter"
+
+[[bin]]
+name = "md2docx-server"
+path = "src/bin/server.rs"
+
+[[bin]]
+name = "md2docx-cli"
+path = "src/bin/cli.rs"
+
+[dependencies]
+# Web framework
+axum = { version = "0.7", features = ["multipart"] }
+tokio = { version = "1.0", features = ["full"] }
+tower = { version = "0.4", features = ["util"] }
+tower-http = { version = "0.5", features = ["cors", "fs", "trace"] }
+
+# Document processing
+docx-rs = "0.4"
+pulldown-cmark = "0.9"
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+serde_yaml = "0.9"
+
+# HTTP client for LLM integration
+reqwest = { version = "0.11.20", features = ["json"] }
+
+# CLI
+clap = { version = "4.0", features = ["derive"] }
+
+# Error handling
+anyhow = "1.0"
+thiserror = "1.0"
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Async utilities
+futures = "0.3"
+
+# File handling
+mime = "0.3"
+uuid = { version = "1.0", features = ["v4"] }
+
+# Rate limiting and resource management
+governor = "0.6"
+
+# Memory monitoring
+sysinfo = "0.30"
+
+# Async task queue
+tokio-util = "0.7"
+
+[dev-dependencies]
+tokio-test = "0.4"
+criterion = "0.5"
+tempfile = "3.0"
+mockall = "0.12"
+wiremock = "0.5"
+assert_matches = "1.5"
+pretty_assertions = "1.4"
+rstest = "0.18"
+

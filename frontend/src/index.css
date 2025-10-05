@@ -1,0 +1,28 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Monaco Editor Error Highlighting */
+.monaco-editor .error-line {
+  background-color: rgba(239, 68, 68, 0.1) !important;
+}
+
+.monaco-editor .error-glyph {
+  background-color: #ef4444 !important;
+  width: 4px !important;
+  margin-left: 3px !important;
+}
+
+/* Custom scrollbar for Monaco Editor */
+.monaco-editor .monaco-scrollable-element > .scrollbar > .slider {
+  background: rgba(100, 100, 100, 0.4) !important;
+}
+
+.monaco-editor .monaco-scrollable-element > .scrollbar > .slider:hover {
+  background: rgba(100, 100, 100, 0.7) !important;
+}
+
+/* Smooth transitions for validation states */
+.config-validation-transition {
+  transition: border-color 0.2s ease-in-out, background-color 0.2s ease-in-out;
+}

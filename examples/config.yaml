@@ -1,0 +1,87 @@
+# Example configuration for Markdown to docx converter
+
+document:
+  page_size:
+    width: 595.0    # A4 width in points
+    height: 842.0   # A4 height in points
+  margins:
+    top: 72.0       # 1 inch
+    bottom: 72.0
+    left: 72.0
+    right: 72.0
+  default_font:
+    family: "Times New Roman"
+    size: 12.0
+    bold: false
+    italic: false
+
+styles:
+  headings:
+    1:
+      font:
+        family: "Times New Roman"
+        size: 18.0
+        bold: true
+        italic: false
+      spacing_before: 12.0
+      spacing_after: 6.0
+    2:
+      font:
+        family: "Times New Roman"
+        size: 16.0
+        bold: true
+        italic: false
+      spacing_before: 12.0
+      spacing_after: 6.0
+    3:
+      font:
+        family: "Times New Roman"
+        size: 14.0
+        bold: true
+        italic: false
+      spacing_before: 12.0
+      spacing_after: 6.0
+  
+  paragraph:
+    font:
+      family: "Times New Roman"
+      size: 12.0
+      bold: false
+      italic: false
+    line_spacing: 1.15
+    spacing_after: 6.0
+  
+  code_block:
+    font:
+      family: "Courier New"
+      size: 10.0
+      bold: false
+      italic: false
+    background_color: "#f5f5f5"
+    border: true
+  
+  table:
+    header_font:
+      family: "Times New Roman"
+      size: 12.0
+      bold: true
+      italic: false
+    cell_font:
+      family: "Times New Roman"
+      size: 12.0
+      bold: false
+      italic: false
+    border_width: 1.0
+
+elements:
+  image:
+    max_width: 500.0
+    max_height: 400.0
+  
+  list:
+    indent: 36.0
+    spacing: 6.0
+  
+  link:
+    color: "#0066cc"
+    underline: true

@@ -1,0 +1,56 @@
+[Unit]
+Description=MD2DOCX Converter Service
+Documentation=https://github.com/yourusername/md2docx-converter
+After=network.target
+Wants=network.target
+
+[Service]
+Type=exec
+User=md2docx
+Group=md2docx
+WorkingDirectory=/opt/md2docx-converter
+ExecStart=/opt/md2docx-converter/md2docx-server
+ExecReload=/bin/kill -HUP $MAINPID
+KillMode=mixed
+KillSignal=SIGINT
+TimeoutStopSec=30
+Restart=always
+RestartSec=5
+
+# Environment variables
+Environment=RUST_LOG=info
+Environment=PORT=3000
+Environment=HOST=0.0.0.0
+Environment=MAX_FILE_SIZE=104857600
+Environment=RATE_LIMIT_PER_MINUTE=100
+
+# Security settings
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/md2docx-converter/uploads /opt/md2docx-converter/output /var/log/md2docx
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictRealtime=true
+RestrictNamespaces=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+
+# Resource limits
+LimitNOFILE=65536
+LimitNPROC=4096
+MemoryMax=2G
+CPUQuota=200%
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=md2docx-converter
+
+[Install]
+WantedBy=multi-user.target
