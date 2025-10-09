@@ -75,15 +75,15 @@ export default function FileUpload() {
   }, [setSelectedFile, setError]);
 
   return (
-    <div className="space-y-6">
+    <div className="desktop-spacing">
       <div>
-        <h2 className="text-lg font-medium text-gray-900 mb-4">
+        <h2 className="section-title">
           Upload Markdown File
         </h2>
         
         <div
           {...getRootProps()}
-          className={`border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors ${
+          className={`drag-drop-area border-2 border-dashed rounded-lg p-6 text-center cursor-pointer ${
             isDragActive
               ? 'border-blue-400 bg-blue-50'
               : selectedFile && !isUploading
@@ -125,13 +125,13 @@ export default function FileUpload() {
               <p className="text-xs text-green-600">
                 {(selectedFile.size / 1024).toFixed(1)} KB
               </p>
-              <div className="flex items-center justify-center space-x-4 mt-3">
+              <div className="flex items-center justify-center space-x-3 mt-3">
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
                     removeFile();
                   }}
-                  className="inline-flex items-center px-3 py-1 border border-red-300 text-xs font-medium rounded text-red-700 bg-white hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                  className="inline-flex items-center px-2.5 py-1 border border-red-300 text-xs font-medium rounded text-red-700 bg-white hover:bg-red-50 focus:outline-none focus:ring-1 focus:ring-red-500 transition-colors"
                 >
                   <XMarkIcon className="h-3 w-3 mr-1" />
                   Remove
@@ -143,7 +143,7 @@ export default function FileUpload() {
             </div>
           ) : (
             <div className="space-y-2">
-              <CloudArrowUpIcon className="mx-auto h-12 w-12 text-gray-400" />
+              <CloudArrowUpIcon className="mx-auto h-10 w-10 text-gray-400" />
               <p className="text-sm font-medium text-gray-700">
                 {isDragActive
                   ? 'Drop the file here'
@@ -183,7 +183,7 @@ export default function FileUpload() {
             <h3 className="text-sm font-medium text-gray-900">
               File Details
             </h3>
-            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+            <span className="status-indicator status-success">
               Ready
             </span>
           </div>

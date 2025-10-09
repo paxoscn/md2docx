@@ -15,15 +15,15 @@ export default function HomePage() {
   ] as const;
 
   return (
-    <div className="max-w-6xl mx-auto">
-      {/* Tab Navigation */}
-      <div className="border-b border-gray-200 mb-8">
-        <nav className="-mb-px flex space-x-8">
+    <div className="w-full">
+      {/* Compact Tab Navigation */}
+      <div className="border-b border-gray-200 mb-4">
+        <nav className="-mb-px flex space-x-4">
           {tabs.map((tab) => (
             <button
               key={tab.id}
               onClick={() => !tab.disabled && setActiveTab(tab.id)}
-              className={`py-2 px-1 border-b-2 font-medium text-sm ${
+              className={`py-2 px-3 border-b-2 font-medium text-sm transition-colors ${
                 activeTab === tab.id
                   ? 'border-blue-500 text-blue-600'
                   : tab.disabled
@@ -38,13 +38,13 @@ export default function HomePage() {
         </nav>
       </div>
 
-      {/* Error Display */}
+      {/* Compact Error Display */}
       {error && (
-        <div className="mb-6 bg-red-50 border border-red-200 rounded-md p-4">
+        <div className="mb-4 bg-red-50 border border-red-200 rounded-md p-3">
           <div className="flex">
-            <div className="ml-3">
+            <div className="ml-2">
               <h3 className="text-sm font-medium text-red-800">Error</h3>
-              <div className="mt-2 text-sm text-red-700">
+              <div className="mt-1 text-sm text-red-700">
                 <p>{error}</p>
               </div>
             </div>
@@ -52,11 +52,13 @@ export default function HomePage() {
         </div>
       )}
 
-      {/* Tab Content */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-        {activeTab === 'upload' && <FileUpload />}
-        {activeTab === 'config' && <ConfigEditor />}
-        {activeTab === 'convert' && <ConversionPanel />}
+      {/* Tab Content with Desktop Optimization */}
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 desktop-compact">
+        <div className="desktop-spacing">
+          {activeTab === 'upload' && <FileUpload />}
+          {activeTab === 'config' && <ConfigEditor />}
+          {activeTab === 'convert' && <ConversionPanel />}
+        </div>
       </div>
     </div>
   );

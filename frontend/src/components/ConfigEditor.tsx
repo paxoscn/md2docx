@@ -93,9 +93,9 @@ export default function ConfigEditor() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="desktop-spacing">
       <div>
-        <h2 className="text-lg font-medium text-gray-900 mb-4">
+        <h2 className="section-title">
           Configuration Editor
         </h2>
         
@@ -115,7 +115,7 @@ export default function ConfigEditor() {
               onKeyDown={handleKeyPress}
               placeholder="e.g., Make all headings bold and increase font size to 16pt, or change paragraph spacing to 1.5"
               rows={3}
-              className="w-full px-3 py-2 border border-blue-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+              className="w-full form-textarea-compact border-blue-300"
             />
             <div className="flex justify-between items-center">
               <div className="text-xs text-blue-600">
@@ -124,11 +124,11 @@ export default function ConfigEditor() {
               <button
                 onClick={handleNaturalLanguageUpdate}
                 disabled={!naturalLanguagePrompt.trim() || isUpdating}
-                className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="btn-primary btn-small"
               >
                 {isUpdating ? (
                   <span className="flex items-center">
-                    <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <svg className="animate-spin -ml-1 mr-2 h-3 w-3 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                     </svg>

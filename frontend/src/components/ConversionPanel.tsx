@@ -147,16 +147,16 @@ export default function ConversionPanel() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="desktop-spacing">
       <div>
-        <h2 className="text-lg font-medium text-gray-900 mb-4">
+        <h2 className="section-title">
           Convert to DOCX
         </h2>
         
         {/* File and Config Summary */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
           <div className="bg-gray-50 rounded-lg p-4">
-            <h3 className="text-sm font-medium text-gray-900 mb-2">
+            <h3 className="subsection-title">
               Selected File
             </h3>
             {selectedFile ? (
@@ -170,7 +170,7 @@ export default function ConversionPanel() {
           </div>
           
           <div className="bg-gray-50 rounded-lg p-4">
-            <h3 className="text-sm font-medium text-gray-900 mb-2">
+            <h3 className="subsection-title">
               Configuration
             </h3>
             <div className="text-sm text-gray-600">
@@ -196,18 +196,18 @@ export default function ConversionPanel() {
                 <div className="mt-2 text-sm text-red-700">
                   <p>{error}</p>
                 </div>
-                <div className="mt-3 flex space-x-3">
+                <div className="mt-3 flex flex-wrap gap-2">
                   {selectedFile && !isConverting && (
                     <button
                       onClick={handleRetry}
-                      className="text-sm font-medium text-red-800 hover:text-red-900 bg-red-100 px-3 py-1 rounded"
+                      className="text-xs font-medium text-red-800 hover:text-red-900 bg-red-100 px-3 py-1.5 rounded transition-colors"
                     >
                       Try Again
                     </button>
                   )}
                   <button
                     onClick={() => setError(null)}
-                    className="text-sm font-medium text-red-800 hover:text-red-900"
+                    className="text-xs font-medium text-red-800 hover:text-red-900 px-2 py-1.5 rounded hover:bg-red-50 transition-colors"
                   >
                     Dismiss
                   </button>
@@ -220,25 +220,27 @@ export default function ConversionPanel() {
         {/* Conversion Controls */}
         <div className="space-y-4">
           {!convertedFile && (
-            <button
-              onClick={() => handleConvert()}
-              disabled={!selectedFile || isConverting}
-              className="w-full flex items-center justify-center px-4 py-3 bg-blue-600 text-white font-medium rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
-              {isConverting ? (
-                <>
-                  <Cog6ToothIcon className="animate-spin -ml-1 mr-3 h-5 w-5" />
-                  Converting...
-                </>
-              ) : (
-                'Convert to DOCX'
-              )}
-            </button>
+            <div className="flex justify-center">
+              <button
+                onClick={() => handleConvert()}
+                disabled={!selectedFile || isConverting}
+                className="btn-primary desktop-btn flex items-center"
+              >
+                {isConverting ? (
+                  <>
+                    <Cog6ToothIcon className="animate-spin -ml-1 mr-2 h-4 w-4" />
+                    Converting...
+                  </>
+                ) : (
+                  'Convert to DOCX'
+                )}
+              </button>
+            </div>
           )}
 
           {/* Progress Bar */}
           {isConverting && (
-            <div className="space-y-2">
+            <div className="space-y-2 max-w-md mx-auto">
               <div className="w-full bg-gray-200 rounded-full h-2">
                 <div
                   className="bg-blue-600 h-2 rounded-full transition-all duration-300"
@@ -278,18 +280,18 @@ export default function ConversionPanel() {
                 </div>
               </div>
               
-              <div className="flex space-x-3">
+              <div className="flex flex-col sm:flex-row gap-3 justify-center">
                 <button
                   onClick={handleDownload}
-                  className="flex-1 flex items-center justify-center px-4 py-3 bg-green-600 text-white font-medium rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 transition-colors"
+                  className="btn-success desktop-btn flex items-center"
                 >
-                  <ArrowDownTrayIcon className="-ml-1 mr-3 h-5 w-5" />
+                  <ArrowDownTrayIcon className="-ml-1 mr-2 h-4 w-4" />
                   Download DOCX File
                 </button>
                 
                 <button
                   onClick={handleReset}
-                  className="px-4 py-3 bg-gray-200 text-gray-700 font-medium rounded-md hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-colors"
+                  className="btn-secondary desktop-btn"
                 >
                   Convert Another
                 </button>
