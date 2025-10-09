@@ -44,10 +44,11 @@ impl DocxGenerator {
         let doc_config = &self.config.document;
         
         // Apply page settings - docx.page_size takes width and height as separate u32 parameters
-        docx = docx.page_size(
-            doc_config.page_size.width as u32,
-            doc_config.page_size.height as u32
-        );
+        // FIXME Commented out for unexpected small page size
+        // docx = docx.page_size(
+        //     doc_config.page_size.width as u32,
+        //     doc_config.page_size.height as u32
+        // );
         
         // Apply margins - create PageMargin and apply it
         let page_margin = PageMargin::new()
