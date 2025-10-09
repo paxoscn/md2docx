@@ -122,6 +122,7 @@ pub struct HeadingStyle {
     pub font: FontConfig,
     pub spacing_before: f32,
     pub spacing_after: f32,
+    pub alignment: Option<String>,
 }
 
 impl HeadingStyle {
@@ -310,6 +311,7 @@ impl Default for StyleConfig {
                 },
                 spacing_before: 12.0,
                 spacing_after: 6.0,
+                alignment: None,
             });
         }
         

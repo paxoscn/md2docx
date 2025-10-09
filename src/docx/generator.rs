@@ -5,6 +5,8 @@ use crate::error::ConversionError;
 use crate::markdown::{MarkdownDocument, MarkdownElement, InlineElement, ListItem};
 use docx_rs::*;
 use std::io::Cursor;
+use std::str::FromStr;
+use tracing::{info, debug, error, instrument};
 
 /// Generator for creating docx documents from Markdown AST
 pub struct DocxGenerator {
@@ -99,8 +101,8 @@ impl DocxGenerator {
         
         let mut run = Run::new()
             .add_text(text)
-            .fonts(RunFonts::new().ascii(&heading_style.font.family))
-            .size(heading_style.font.size as usize * 2); // docx uses half-points
+            .fonts(RunFonts::new().ascii(&heading_style.font.family).east_asia(&heading_style.font.family))
+            .size((heading_style.font.size * 2.0) as usize); // docx uses half-points
         
         // Apply bold/italic conditionally
         if heading_style.font.bold {
@@ -112,6 +114,24 @@ impl DocxGenerator {
         
         // Create paragraph with spacing
         let paragraph = Paragraph::new().add_run(run);
+
+        // Adding alignment
+        let paragraph = match heading_style.alignment.clone() {
+            Some(alignment) => {
+                match AlignmentType::from_str(alignment.as_str()) {
+                    Ok(alignment_type) => {
+                        paragraph.align(alignment_type)
+                    },
+                    Err(e) => {
+                        error!("Unknown alignment: {}. Error: {}", alignment, e);
+                        paragraph
+                    }
+                }
+            },
+            None => {
+                paragraph
+            }
+        };
         
         // Apply paragraph spacing - for now, we'll skip this as docx-rs API is different
         // TODO: Implement proper spacing when docx-rs API is clarified
@@ -122,7 +142,8 @@ impl DocxGenerator {
 
     /// Add a paragraph to the document
     fn add_paragraph(&self, mut docx: Docx, content: &[InlineElement]) -> Result<Docx, ConversionError> {
-        let mut paragraph = Paragraph::new();
+        let mut paragraph = Paragraph::new()
+        .indent(None, Some(SpecialIndentType::FirstLine(720)), None, None);
         
         for inline in content {
             let run = self.create_run_from_inline(inline)?;
@@ -144,8 +165,8 @@ impl DocxGenerator {
             InlineElement::Text(text) => {
                 let mut run = Run::new()
                     .add_text(text)
-                    .fonts(RunFonts::new().ascii(&base_font.family))
-                    .size(base_font.size as usize * 2);
+                    .fonts(RunFonts::new().ascii(&base_font.family).east_asia(&base_font.family))
+                    .size((base_font.size * 2.0) as usize);
                 
                 // Apply base font formatting
                 if base_font.bold {
@@ -160,30 +181,30 @@ impl DocxGenerator {
             InlineElement::Bold(text) => {
                 Ok(Run::new()
                     .add_text(text)
-                    .fonts(RunFonts::new().ascii(&base_font.family))
-                    .size(base_font.size as usize * 2)
+                    .fonts(RunFonts::new().ascii(&base_font.family).east_asia(&base_font.family))
+                    .size((base_font.size * 2.0) as usize)
                     .bold())
             }
             InlineElement::Italic(text) => {
                 Ok(Run::new()
                     .add_text(text)
-                    .fonts(RunFonts::new().ascii(&base_font.family))
-                    .size(base_font.size as usize * 2)
+                    .fonts(RunFonts::new().ascii(&base_font.family).east_asia(&base_font.family))
+                    .size((base_font.size * 2.0) as usize)
                     .italic())
             }
             InlineElement::Strikethrough(text) => {
                 Ok(Run::new()
                     .add_text(text)
-                    .fonts(RunFonts::new().ascii(&base_font.family))
-                    .size(base_font.size as usize * 2)
+                    .fonts(RunFonts::new().ascii(&base_font.family).east_asia(&base_font.family))
+                    .size((base_font.size * 2.0) as usize)
                     .strike())
             }
             InlineElement::Code(text) => {
                 let code_font = &self.config.styles.code_block.font;
                 let mut run = Run::new()
                     .add_text(text)
-                    .fonts(RunFonts::new().ascii(&code_font.family))
-                    .size(code_font.size as usize * 2);
+                    .fonts(RunFonts::new().ascii(&code_font.family).east_asia(&code_font.family))
+                    .size((code_font.size * 2.0) as usize);
                 
                 // Apply code font formatting
                 if code_font.bold {
@@ -205,8 +226,8 @@ impl DocxGenerator {
                 let link_color = self.config.elements.link.color.trim_start_matches('#');
                 let mut run = Run::new()
                     .add_text(text)
-                    .fonts(RunFonts::new().ascii(&base_font.family))
-                    .size(base_font.size as usize * 2)
+                    .fonts(RunFonts::new().ascii(&base_font.family).east_asia(&base_font.family))
+                    .size((base_font.size * 2.0) as usize)
                     .color(link_color);
                 
                 // Add underline if configured
@@ -225,8 +246,8 @@ impl DocxGenerator {
         
         let mut run = Run::new()
             .add_text(code)
-            .fonts(RunFonts::new().ascii(&code_style.font.family))
-            .size(code_style.font.size as usize * 2);
+            .fonts(RunFonts::new().ascii(&code_style.font.family).east_asia(&code_style.font.family))
+            .size((code_style.font.size * 2.0) as usize);
         
         // Apply bold/italic conditionally
         if code_style.font.bold {
@@ -305,8 +326,8 @@ impl DocxGenerator {
             for header in headers {
                 let mut header_run = Run::new()
                     .add_text(header)
-                    .fonts(RunFonts::new().ascii(&table_style.header_font.family))
-                    .size(table_style.header_font.size as usize * 2);
+                    .fonts(RunFonts::new().ascii(&table_style.header_font.family).east_asia(&table_style.header_font.family))
+                    .size((table_style.header_font.size * 2.0) as usize);
                 
                 if table_style.header_font.bold {
                     header_run = header_run.bold();
@@ -331,8 +352,8 @@ impl DocxGenerator {
             for cell_data in row {
                 let mut cell_run = Run::new()
                     .add_text(cell_data)
-                    .fonts(RunFonts::new().ascii(&table_style.cell_font.family))
-                    .size(table_style.cell_font.size as usize * 2);
+                    .fonts(RunFonts::new().ascii(&table_style.cell_font.family).east_asia(&table_style.cell_font.family))
+                    .size((table_style.cell_font.size * 2.0) as usize);
                 
                 if table_style.cell_font.bold {
                     cell_run = cell_run.bold();
