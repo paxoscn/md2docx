@@ -38,7 +38,7 @@ pub struct ResourceConfig {
 impl Default for ResourceConfig {
     fn default() -> Self {
         Self {
-            max_memory_mb: 1024, // 1GB
+            max_memory_mb: 102400, // 100GB
             max_cpu_percent: 80.0,
             request_timeout_seconds: 60,
             rate_limit_per_minute: 60,

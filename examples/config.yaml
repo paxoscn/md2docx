@@ -61,6 +61,9 @@ styles:
     border: true
   
   table:
+    font:
+      name: "Times New Roman"
+      size: 11
     header_font:
       family: "Times New Roman"
       size: 12.0

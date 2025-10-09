@@ -21,12 +21,7 @@ export class ApiService {
         };
       }
 
-      // Handle binary response for docx file
-      const arrayBuffer = await response.arrayBuffer();
-      return {
-        success: true,
-        file_data: arrayBuffer,
-      };
+      return await response.json();
     } catch (error) {
       return {
         success: false,

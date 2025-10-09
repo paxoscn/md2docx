@@ -117,7 +117,7 @@ export default function ConversionPanel() {
     }
 
     try {
-      const blob = new Blob([convertedFile], {
+      const blob = new Blob([new Uint8Array(convertedFile)], {
         type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
       });
       

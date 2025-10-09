@@ -35,6 +35,7 @@ impl MarkdownParser {
         
         let mut i = 0;
         while i < events.len() {
+            // println!("event = {:?}, i = {}, len = {}", &events[i], i, events.len());
             match &events[i] {
                 Event::Start(Tag::Heading(level, _, _)) => {
                     i += 1; // Skip start event
@@ -87,6 +88,7 @@ impl MarkdownParser {
                     i += 1;
                 },
                 _ => {
+                    // println!("other event = {:?}", &events[i]);
                     i += 1; // Skip other events
                 }
             }
@@ -228,10 +230,11 @@ impl MarkdownParser {
         let mut elements = Vec::new();
         
         while *index < events.len() {
+            // println!("event = {:?}, index = {}, len = {}", &events[*index], *index, events.len());
             match &events[*index] {
                 Event::End(tag) => {
+                    *index += 1;
                     if self.tag_matches_name(tag, end_tag_name) {
-                        *index += 1;
                         break;
                     }
                 },
@@ -287,6 +290,7 @@ impl MarkdownParser {
         let mut items = Vec::new();
         
         while *index < events.len() {
+            // println!("event = {:?}, index = {}, len = {}", &events[*index], *index, events.len());
             match &events[*index] {
                 Event::End(Tag::List(_)) => {
                     *index += 1;
