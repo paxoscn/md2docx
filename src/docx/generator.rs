@@ -396,14 +396,22 @@ impl DocxGenerator {
     fn add_code_block(&self, mut docx: Docx, code: &str) -> Result<Docx, ConversionError> {
         let code_style = &self.config.styles.code_block;
 
+        // Add spacing before code block using empty paragraph
+        // Since docx-rs doesn't support paragraph spacing directly, we use empty paragraphs
+        let spacing_before = Paragraph::new()
+            .add_run(Run::new().add_text("\u{00A0}")) // Non-breaking space for minimal visibility
+            .size(6); // Small font size for minimal visual impact
+        docx = docx.add_paragraph(spacing_before);
+
         // Create table cell with code content using the helper method
-        let cell = self.create_code_block_cell(code, code_style)?
-        .width(8300, WidthType::Dxa);
+        let cell = self
+            .create_code_block_cell(code, code_style)?
+            .width(8300, WidthType::Dxa);
 
         // Create single-row, single-column table
         let row = TableRow::new(vec![cell]);
-        let mut table = Table::new(vec![row])
-        .margins(TableCellMargins::new().margin(100, 100, 100, 100));
+        let mut table =
+            Table::new(vec![row]).margins(TableCellMargins::new().margin(100, 100, 100, 100));
 
         // Apply border styling based on border_width configuration
         if code_style.border_width > 0.0 {
@@ -412,6 +420,12 @@ impl DocxGenerator {
 
         // Add the table to the document
         docx = docx.add_table(table);
+
+        // Add spacing after code block using empty paragraph
+        let spacing_after = Paragraph::new()
+            .add_run(Run::new().add_text("\u{00A0}")) // Non-breaking space for minimal visibility
+            .size(6); // Small font size for minimal visual impact
+        docx = docx.add_paragraph(spacing_after);
 
         Ok(docx)
     }
@@ -677,8 +691,11 @@ impl DocxGenerator {
                 let paragraph = self.create_code_paragraph("\u{00A0}", style)?; // Use non-breaking space for visibility
                 cell = cell.add_paragraph(paragraph);
             } else {
+                // Trim trailing newlines to avoid extra empty lines at the end
+                let trimmed_code = code.trim_end_matches('\n');
+
                 // Split code by lines, preserving empty lines
-                let lines: Vec<&str> = code.split('\n').collect();
+                let lines: Vec<&str> = trimmed_code.split('\n').collect();
 
                 for (_index, line) in lines.iter().enumerate() {
                     // Convert tabs to spaces (4 spaces per tab) for consistent formatting
@@ -703,7 +720,9 @@ impl DocxGenerator {
             }
         } else {
             // Single paragraph for entire code block with tab conversion
-            let processed_code = code.replace('\t', "    ");
+            // Trim trailing newlines to avoid extra empty lines
+            let trimmed_code = code.trim_end_matches('\n');
+            let processed_code = trimmed_code.replace('\t', "    ");
             let paragraph = self.create_code_paragraph(&processed_code, style)?;
             cell = cell.add_paragraph(paragraph);
         }
@@ -1847,7 +1866,8 @@ mod tests {
         assert!(!docx_bytes.is_empty());
 
         // Test that the code block is rendered as a table
-        let cell_result = generator.create_code_block_cell("let x = 42;", &generator.config.styles.code_block);
+        let cell_result =
+            generator.create_code_block_cell("let x = 42;", &generator.config.styles.code_block);
         assert!(cell_result.is_ok());
     }
 
@@ -1872,14 +1892,18 @@ mod tests {
         assert!(!docx_bytes.is_empty());
 
         // Test that each line is preserved as separate paragraphs within the table cell
-        let cell_result = generator.create_code_block_cell(multi_line_code, &generator.config.styles.code_block);
+        let cell_result =
+            generator.create_code_block_cell(multi_line_code, &generator.config.styles.code_block);
         assert!(cell_result.is_ok());
 
         // Test with preserve_line_breaks = false for comparison
         let mut config_no_preserve = create_test_config();
         config_no_preserve.styles.code_block.preserve_line_breaks = false;
         let generator_no_preserve = DocxGenerator::new(config_no_preserve);
-        let cell_result_no_preserve = generator_no_preserve.create_code_block_cell(multi_line_code, &generator_no_preserve.config.styles.code_block);
+        let cell_result_no_preserve = generator_no_preserve.create_code_block_cell(
+            multi_line_code,
+            &generator_no_preserve.config.styles.code_block,
+        );
         assert!(cell_result_no_preserve.is_ok());
     }
 
@@ -1909,7 +1933,8 @@ mod tests {
         let mut config_no_preserve = create_test_config();
         config_no_preserve.styles.code_block.preserve_line_breaks = false;
         let generator_no_preserve = DocxGenerator::new(config_no_preserve);
-        let cell_result_no_preserve = generator_no_preserve.create_code_block_cell("", &generator_no_preserve.config.styles.code_block);
+        let cell_result_no_preserve = generator_no_preserve
+            .create_code_block_cell("", &generator_no_preserve.config.styles.code_block);
         assert!(cell_result_no_preserve.is_ok());
     }
 
@@ -1919,7 +1944,8 @@ mod tests {
         let generator = DocxGenerator::new(config);
 
         // Create a simple table for testing borders
-        let cell = TableCell::new().add_paragraph(Paragraph::new().add_run(Run::new().add_text("test")));
+        let cell =
+            TableCell::new().add_paragraph(Paragraph::new().add_run(Run::new().add_text("test")));
         let row = TableRow::new(vec![cell]);
         let table = Table::new(vec![row]);
 
@@ -1968,7 +1994,7 @@ mod tests {
     #[test]
     fn test_font_and_styling_application_within_table_cells() {
         let mut config = create_test_config();
-        
+
         // Configure custom font styling for comprehensive testing
         config.styles.code_block.font.family = "Monaco".to_string();
         config.styles.code_block.font.size = 14.0;
@@ -1995,11 +2021,13 @@ mod tests {
         assert!(!docx_bytes.is_empty());
 
         // Test that create_code_paragraph applies all font styling correctly
-        let paragraph_result = generator.create_code_paragraph("test code", &generator.config.styles.code_block);
+        let paragraph_result =
+            generator.create_code_paragraph("test code", &generator.config.styles.code_block);
         assert!(paragraph_result.is_ok());
 
         // Test that create_code_block_cell applies styling and background color
-        let cell_result = generator.create_code_block_cell(code_with_styling, &generator.config.styles.code_block);
+        let cell_result = generator
+            .create_code_block_cell(code_with_styling, &generator.config.styles.code_block);
         assert!(cell_result.is_ok());
 
         // Test with different font configurations
@@ -2011,11 +2039,13 @@ mod tests {
         config_different_font.styles.code_block.background_color = None;
 
         let generator_different = DocxGenerator::new(config_different_font);
-        let cell_result_different = generator_different.create_code_block_cell("test", &generator_different.config.styles.code_block);
+        let cell_result_different = generator_different
+            .create_code_block_cell("test", &generator_different.config.styles.code_block);
         assert!(cell_result_different.is_ok());
 
         // Test paragraph creation with different styling
-        let paragraph_result_different = generator_different.create_code_paragraph("test", &generator_different.config.styles.code_block);
+        let paragraph_result_different = generator_different
+            .create_code_paragraph("test", &generator_different.config.styles.code_block);
         assert!(paragraph_result_different.is_ok());
     }
 
@@ -2039,13 +2069,16 @@ mod tests {
         let test_code = "console.log('background test');";
 
         // All should succeed
-        let cell_result_hex = generator_hex.create_code_block_cell(test_code, &generator_hex.config.styles.code_block);
+        let cell_result_hex = generator_hex
+            .create_code_block_cell(test_code, &generator_hex.config.styles.code_block);
         assert!(cell_result_hex.is_ok());
 
-        let cell_result_hex_no_hash = generator_hex_no_hash.create_code_block_cell(test_code, &generator_hex_no_hash.config.styles.code_block);
+        let cell_result_hex_no_hash = generator_hex_no_hash
+            .create_code_block_cell(test_code, &generator_hex_no_hash.config.styles.code_block);
         assert!(cell_result_hex_no_hash.is_ok());
 
-        let cell_result_no_bg = generator_no_bg.create_code_block_cell(test_code, &generator_no_bg.config.styles.code_block);
+        let cell_result_no_bg = generator_no_bg
+            .create_code_block_cell(test_code, &generator_no_bg.config.styles.code_block);
         assert!(cell_result_no_bg.is_ok());
     }
 
@@ -2070,12 +2103,14 @@ mod tests {
         assert!(!docx_bytes.is_empty());
 
         // Test that special characters are preserved in table cells
-        let cell_result = generator.create_code_block_cell(special_code, &generator.config.styles.code_block);
+        let cell_result =
+            generator.create_code_block_cell(special_code, &generator.config.styles.code_block);
         assert!(cell_result.is_ok());
 
         // Test with tabs and mixed whitespace
         let whitespace_code = "function test() {\n\tif (condition) {\n\t\treturn true;\n\t}\n    return false; // 4 spaces\n}";
-        let cell_result_whitespace = generator.create_code_block_cell(whitespace_code, &generator.config.styles.code_block);
+        let cell_result_whitespace =
+            generator.create_code_block_cell(whitespace_code, &generator.config.styles.code_block);
         assert!(cell_result_whitespace.is_ok());
     }
 
@@ -2097,23 +2132,29 @@ mod tests {
         let test_code = "line1\nline2\nline3";
 
         // Test paragraph creation with different line spacing
-        let paragraph_single = generator_single.create_code_paragraph(test_code, &generator_single.config.styles.code_block);
+        let paragraph_single = generator_single
+            .create_code_paragraph(test_code, &generator_single.config.styles.code_block);
         assert!(paragraph_single.is_ok());
 
-        let paragraph_double = generator_double.create_code_paragraph(test_code, &generator_double.config.styles.code_block);
+        let paragraph_double = generator_double
+            .create_code_paragraph(test_code, &generator_double.config.styles.code_block);
         assert!(paragraph_double.is_ok());
 
-        let paragraph_custom = generator_custom.create_code_paragraph(test_code, &generator_custom.config.styles.code_block);
+        let paragraph_custom = generator_custom
+            .create_code_paragraph(test_code, &generator_custom.config.styles.code_block);
         assert!(paragraph_custom.is_ok());
 
         // Test complete table cell creation with different line spacing
-        let cell_single = generator_single.create_code_block_cell(test_code, &generator_single.config.styles.code_block);
+        let cell_single = generator_single
+            .create_code_block_cell(test_code, &generator_single.config.styles.code_block);
         assert!(cell_single.is_ok());
 
-        let cell_double = generator_double.create_code_block_cell(test_code, &generator_double.config.styles.code_block);
+        let cell_double = generator_double
+            .create_code_block_cell(test_code, &generator_double.config.styles.code_block);
         assert!(cell_double.is_ok());
 
-        let cell_custom = generator_custom.create_code_block_cell(test_code, &generator_custom.config.styles.code_block);
+        let cell_custom = generator_custom
+            .create_code_block_cell(test_code, &generator_custom.config.styles.code_block);
         assert!(cell_custom.is_ok());
     }
 }
