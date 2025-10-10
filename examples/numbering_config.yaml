@@ -106,6 +106,9 @@ styles:
     background_color: "#f5f5f5"
     border: true
     padding: 8.0
+    preserve_line_breaks: true    # Preserve original line breaks in code blocks
+    line_spacing: 1.0             # Line spacing within code blocks (1.0 = single spacing)
+    paragraph_spacing: 6.0        # Spacing between code block paragraphs in points
 
   table:
     header_font:

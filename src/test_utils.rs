@@ -73,6 +73,9 @@ pub fn create_test_config() -> ConversionConfig {
                 },
                 background_color: Some("#f5f5f5".to_string()),
                 border: true,
+                preserve_line_breaks: true,
+                line_spacing: 1.0,
+                paragraph_spacing: 6.0,
             },
             table: TableStyle {
                 header_font: FontConfig {

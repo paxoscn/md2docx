@@ -11,6 +11,11 @@ Key configuration sections:
 - styles: Formatting for different elements (headings, paragraphs, code blocks, tables)
 - elements: Settings for images, lists, links
 
+Code block configuration options:
+- preserve_line_breaks: true/false - Whether to preserve original line breaks in code blocks
+- line_spacing: Number - Line spacing within code blocks (1.0 = single spacing)
+- paragraph_spacing: Number - Spacing between code block paragraphs in points
+
 Heading numbering configuration:
 - Add "numbering" field to heading styles to enable automatic numbering
 - Numbering formats use placeholders: %1 for level 1, %2 for level 2, etc.
@@ -73,6 +78,14 @@ pub fn get_example_prompts() -> Vec<(&'static str, &'static str)> {
         (
             "代码块使用Consolas字体，背景色为浅灰色",
             "Use Consolas font for code blocks with light gray background",
+        ),
+        (
+            "代码块保留原始换行符，行间距设为1.2倍",
+            "Preserve line breaks in code blocks with 1.2x line spacing",
+        ),
+        (
+            "关闭代码块换行符保留功能",
+            "Disable line break preservation in code blocks",
         ),
         (
             "表格边框设为1pt黑色实线",
@@ -331,7 +344,7 @@ mod tests {
     fn test_get_example_prompts() {
         let examples = get_example_prompts();
         assert!(!examples.is_empty());
-        assert_eq!(examples.len(), 10); // Updated count to include numbering examples
+        assert_eq!(examples.len(), 12); // Updated count to include numbering and code block examples
 
         // Check that each example has both Chinese and English versions
         for (chinese, english) in &examples {

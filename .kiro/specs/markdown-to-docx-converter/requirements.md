@@ -76,6 +76,7 @@
 1. WHEN Markdown包含标题（H1-H6）THEN 系统 SHALL 根据配置转换为相应的docx标题样式
 2. WHEN Markdown包含粗体、斜体、删除线 THEN 系统 SHALL 保持相应的文本格式
 3. WHEN Markdown包含代码块和行内代码 THEN 系统 SHALL 应用等宽字体和背景色
+7. WHEN Markdown代码块包含换行符 THEN 系统 SHALL 在转换后的docx文档中保留原始的换行格式
 4. WHEN Markdown包含表格 THEN 系统 SHALL 转换为docx表格格式
 5. WHEN Markdown包含图片链接 THEN 系统 SHALL 嵌入图片到docx文档中
 6. WHEN Markdown包含有序和无序列表 THEN 系统 SHALL 转换为相应的docx列表格式

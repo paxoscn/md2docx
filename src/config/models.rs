@@ -175,6 +175,9 @@ pub struct CodeBlockStyle {
     pub font: FontConfig,
     pub background_color: Option<String>,
     pub border: bool,
+    pub preserve_line_breaks: bool,
+    pub line_spacing: f32,
+    pub paragraph_spacing: f32,
 }
 
 impl CodeBlockStyle {
@@ -183,6 +186,9 @@ impl CodeBlockStyle {
         self.font.validate()?;
         if let Some(color) = &self.background_color {
             validate_color(color)?;
+        }
+        if self.line_spacing <= 0.0 || self.paragraph_spacing < 0.0 {
+            return Err(ValidationError::InvalidSpacing);
         }
         Ok(())
     }
@@ -354,6 +360,9 @@ impl Default for StyleConfig {
                 },
                 background_color: Some("#f5f5f5".to_string()),
                 border: true,
+                preserve_line_breaks: true,
+                line_spacing: 1.0,
+                paragraph_spacing: 6.0,
             },
             table: TableStyle {
                 header_font: FontConfig {
@@ -638,5 +647,171 @@ mod tests {
             deserialized.styles.headings.get(&1).unwrap().numbering,
             None
         );
+    }
+
+    #[test]
+    fn test_code_block_line_break_config() {
+        let config = ConversionConfig::default();
+        
+        // Test default values for new code block fields
+        assert_eq!(config.styles.code_block.preserve_line_breaks, true);
+        assert_eq!(config.styles.code_block.line_spacing, 1.0);
+        assert_eq!(config.styles.code_block.paragraph_spacing, 6.0);
+        
+        // Test validation passes with default values
+        assert!(config.validate().is_ok());
+    }
+
+    #[test]
+    fn test_invalid_code_block_spacing() {
+        let mut config = ConversionConfig::default();
+        
+        // Test invalid line spacing
+        config.styles.code_block.line_spacing = 0.0;
+        let result = config.validate();
+        assert!(result.is_err());
+        assert!(matches!(
+            result.unwrap_err(),
+            ValidationError::InvalidSpacing
+        ));
+        
+        // Reset and test invalid paragraph spacing
+        config.styles.code_block.line_spacing = 1.0;
+        config.styles.code_block.paragraph_spacing = -1.0;
+        let result = config.validate();
+        assert!(result.is_err());
+        assert!(matches!(
+            result.unwrap_err(),
+            ValidationError::InvalidSpacing
+        ));
+    }
+
+    #[test]
+    fn test_code_block_serialization() {
+        let mut config = ConversionConfig::default();
+        config.styles.code_block.preserve_line_breaks = false;
+        config.styles.code_block.line_spacing = 1.5;
+        config.styles.code_block.paragraph_spacing = 12.0;
+
+        // Test JSON serialization
+        let json = serde_json::to_string(&config).unwrap();
+        let deserialized: ConversionConfig = serde_json::from_str(&json).unwrap();
+        assert!(deserialized.validate().is_ok());
+        assert_eq!(deserialized.styles.code_block.preserve_line_breaks, false);
+        assert_eq!(deserialized.styles.code_block.line_spacing, 1.5);
+        assert_eq!(deserialized.styles.code_block.paragraph_spacing, 12.0);
+
+        // Test YAML serialization
+        let yaml = serde_yaml::to_string(&config).unwrap();
+        let deserialized: ConversionConfig = serde_yaml::from_str(&yaml).unwrap();
+        assert!(deserialized.validate().is_ok());
+        assert_eq!(deserialized.styles.code_block.preserve_line_breaks, false);
+        assert_eq!(deserialized.styles.code_block.line_spacing, 1.5);
+        assert_eq!(deserialized.styles.code_block.paragraph_spacing, 12.0);
+    }
+
+    #[test]
+    fn test_code_block_edge_case_configurations() {
+        let mut config = ConversionConfig::default();
+        
+        // Test minimum valid values
+        config.styles.code_block.line_spacing = 0.1;
+        config.styles.code_block.paragraph_spacing = 0.0;
+        assert!(config.validate().is_ok());
+        
+        // Test boolean toggle
+        config.styles.code_block.preserve_line_breaks = false;
+        assert!(config.validate().is_ok());
+        config.styles.code_block.preserve_line_breaks = true;
+        assert!(config.validate().is_ok());
+        
+        // Test larger values
+        config.styles.code_block.line_spacing = 3.0;
+        config.styles.code_block.paragraph_spacing = 24.0;
+        assert!(config.validate().is_ok());
+    }
+
+    #[test]
+    fn test_code_block_backward_compatibility() {
+        // Test that old configurations without the new fields can still be loaded
+        let old_config_yaml = "
+document:
+  page_size:
+    width: 595.0
+    height: 842.0
+  margins:
+    top: 72.0
+    bottom: 72.0
+    left: 72.0
+    right: 72.0
+  default_font:
+    family: \"Times New Roman\"
+    size: 12.0
+    bold: false
+    italic: false
+styles:
+  headings:
+    1:
+      font:
+        family: \"Arial\"
+        size: 18.0
+        bold: true
+        italic: false
+      spacing_before: 12.0
+      spacing_after: 6.0
+  paragraph:
+    font:
+      family: \"Times New Roman\"
+      size: 12.0
+      bold: false
+      italic: false
+    line_spacing: 1.15
+    spacing_after: 6.0
+  code_block:
+    font:
+      family: \"Courier New\"
+      size: 10.0
+      bold: false
+      italic: false
+    background_color: \"#f5f5f5\"
+    border: true
+  table:
+    header_font:
+      family: \"Times New Roman\"
+      size: 12.0
+      bold: true
+      italic: false
+    cell_font:
+      family: \"Times New Roman\"
+      size: 12.0
+      bold: false
+      italic: false
+    border_width: 1.0
+elements:
+  image:
+    max_width: 500.0
+    max_height: 400.0
+  list:
+    indent: 36.0
+    spacing: 6.0
+  link:
+    color: \"#0066cc\"
+    underline: true
+";
+
+        // This should fail to deserialize because the new fields are required
+        let result: Result<ConversionConfig, _> = serde_yaml::from_str(old_config_yaml);
+        assert!(result.is_err(), "Old config without new fields should fail to deserialize");
+        
+        // But if we use the default config and serialize/deserialize, it should work
+        let default_config = ConversionConfig::default();
+        let yaml = serde_yaml::to_string(&default_config).unwrap();
+        let deserialized: ConversionConfig = serde_yaml::from_str(&yaml).unwrap();
+        assert!(deserialized.validate().is_ok());
+        
+        // The new fields should have their default values
+        assert_eq!(deserialized.styles.code_block.preserve_line_breaks, true);
+        assert_eq!(deserialized.styles.code_block.line_spacing, 1.0);
+        assert_eq!(deserialized.styles.code_block.paragraph_spacing, 6.0);
     }
 }

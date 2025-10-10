@@ -232,6 +232,75 @@ pub enum InlineElement {
 }
 ```
 
+## 代码块换行符保留设计
+
+### 技术实现方案
+
+为了在转换后的docx文档中保留Markdown代码块的原始换行格式，需要对现有的代码块处理逻辑进行增强：
+
+#### 1. 换行符处理策略
+
+```rust
+impl DocxGenerator {
+    fn add_code_block(&self, mut docx: Docx, code: &str) -> Result<Docx, ConversionError> {
+        let code_style = &self.config.styles.code_block;
+        
+        // 按行分割代码内容，保留原始换行结构
+        let lines: Vec<&str> = code.lines().collect();
+        
+        for (i, line) in lines.iter().enumerate() {
+            let mut run = Run::new()
+                .add_text(line)
+                .fonts(RunFonts::new().ascii(&code_style.font.family))
+                .size((code_style.font.size * 2.0) as usize);
+            
+            // 应用样式设置
+            if code_style.font.bold {
+                run = run.bold();
+            }
+            if code_style.font.italic {
+                run = run.italic();
+            }
+            
+            let mut paragraph = Paragraph::new().add_run(run);
+            
+            // 为代码块段落设置特殊样式
+            paragraph = paragraph.style("CodeBlock");
+            
+            docx = docx.add_paragraph(paragraph);
+            
+            // 如果不是最后一行，添加适当的行间距
+            if i < lines.len() - 1 {
+                // 可以通过配置控制代码块内部的行间距
+            }
+        }
+        
+        Ok(docx)
+    }
+}
+```
+
+#### 2. 配置扩展
+
+为支持代码块换行符保留，需要扩展配置模型：
+
+```rust
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CodeBlockStyle {
+    pub font: FontConfig,
+    pub background_color: Option<String>,
+    pub preserve_line_breaks: bool,  // 新增：是否保留换行符
+    pub line_spacing: f32,           // 新增：代码块内部行间距
+    pub paragraph_spacing: f32,      // 新增：代码块段落间距
+}
+```
+
+#### 3. 处理边缘情况
+
+- **空行处理**: 保留代码块中的空行，在docx中表示为空段落
+- **制表符处理**: 将制表符转换为适当数量的空格
+- **长行处理**: 对于超长代码行，保持原始格式不进行自动换行
+
 ## Error Handling
 
 ### 错误类型定义
