@@ -52,6 +52,18 @@ pub fn create_test_config() -> ConversionConfig {
                     alignment: None,
                     numbering: None,
                 });
+                headings.insert(3, HeadingStyle {
+                    font: FontConfig {
+                        family: "Arial".to_string(),
+                        size: 14.0,
+                        bold: true,
+                        italic: false,
+                    },
+                    spacing_before: 10.0,
+                    spacing_after: 5.0,
+                    alignment: None,
+                    numbering: None,
+                });
                 headings
             },
             paragraph: ParagraphStyle {
@@ -72,7 +84,7 @@ pub fn create_test_config() -> ConversionConfig {
                     italic: false,
                 },
                 background_color: Some("#f5f5f5".to_string()),
-                border: true,
+                border_width: 1.0,
                 preserve_line_breaks: true,
                 line_spacing: 1.0,
                 paragraph_spacing: 6.0,

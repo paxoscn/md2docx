@@ -26,6 +26,8 @@ pub enum ValidationError {
     InvalidImageDimensions,
     #[error("Invalid numbering format: {0}")]
     InvalidNumberingFormat(String),
+    #[error("Invalid border width: must be non-negative")]
+    InvalidBorderWidth,
 }
 
 /// Main configuration structure for conversion
@@ -170,14 +172,143 @@ impl ParagraphStyle {
 }
 
 /// Code block style configuration
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize)]
 pub struct CodeBlockStyle {
     pub font: FontConfig,
     pub background_color: Option<String>,
-    pub border: bool,
+    pub border_width: f32,
     pub preserve_line_breaks: bool,
     pub line_spacing: f32,
     pub paragraph_spacing: f32,
+}
+
+// Custom deserializer for backward compatibility
+impl<'de> Deserialize<'de> for CodeBlockStyle {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        use serde::de::{self, MapAccess, Visitor};
+        use std::fmt;
+
+        #[derive(Deserialize)]
+        #[serde(field_identifier, rename_all = "snake_case")]
+        enum Field {
+            Font,
+            BackgroundColor,
+            Border,
+            BorderWidth,
+            PreserveLineBreaks,
+            LineSpacing,
+            ParagraphSpacing,
+        }
+
+        struct CodeBlockStyleVisitor;
+
+        impl<'de> Visitor<'de> for CodeBlockStyleVisitor {
+            type Value = CodeBlockStyle;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("struct CodeBlockStyle")
+            }
+
+            fn visit_map<V>(self, mut map: V) -> Result<CodeBlockStyle, V::Error>
+            where
+                V: MapAccess<'de>,
+            {
+                let mut font = None;
+                let mut background_color = None;
+                let mut border_width = None;
+                let mut old_border = None;
+                let mut preserve_line_breaks = None;
+                let mut line_spacing = None;
+                let mut paragraph_spacing = None;
+
+                while let Some(key) = map.next_key()? {
+                    match key {
+                        Field::Font => {
+                            if font.is_some() {
+                                return Err(de::Error::duplicate_field("font"));
+                            }
+                            font = Some(map.next_value()?);
+                        }
+                        Field::BackgroundColor => {
+                            if background_color.is_some() {
+                                return Err(de::Error::duplicate_field("background_color"));
+                            }
+                            background_color = Some(map.next_value()?);
+                        }
+                        Field::Border => {
+                            if old_border.is_some() {
+                                return Err(de::Error::duplicate_field("border"));
+                            }
+                            old_border = Some(map.next_value::<bool>()?);
+                        }
+                        Field::BorderWidth => {
+                            if border_width.is_some() {
+                                return Err(de::Error::duplicate_field("border_width"));
+                            }
+                            border_width = Some(map.next_value()?);
+                        }
+                        Field::PreserveLineBreaks => {
+                            if preserve_line_breaks.is_some() {
+                                return Err(de::Error::duplicate_field("preserve_line_breaks"));
+                            }
+                            preserve_line_breaks = Some(map.next_value()?);
+                        }
+                        Field::LineSpacing => {
+                            if line_spacing.is_some() {
+                                return Err(de::Error::duplicate_field("line_spacing"));
+                            }
+                            line_spacing = Some(map.next_value()?);
+                        }
+                        Field::ParagraphSpacing => {
+                            if paragraph_spacing.is_some() {
+                                return Err(de::Error::duplicate_field("paragraph_spacing"));
+                            }
+                            paragraph_spacing = Some(map.next_value()?);
+                        }
+                    }
+                }
+
+                let font = font.ok_or_else(|| de::Error::missing_field("font"))?;
+                let preserve_line_breaks = preserve_line_breaks.unwrap_or(true);
+                let line_spacing = line_spacing.unwrap_or(1.0);
+                let paragraph_spacing = paragraph_spacing.unwrap_or(6.0);
+
+                // Handle border_width with backward compatibility
+                let final_border_width = match (border_width, old_border) {
+                    // New border_width property takes precedence
+                    (Some(width), _) => width,
+                    // Convert old border boolean to border_width
+                    (None, Some(true)) => 1.0,
+                    (None, Some(false)) => 0.0,
+                    // Default value if neither is present
+                    (None, None) => 1.0,
+                };
+
+                Ok(CodeBlockStyle {
+                    font,
+                    background_color,
+                    border_width: final_border_width,
+                    preserve_line_breaks,
+                    line_spacing,
+                    paragraph_spacing,
+                })
+            }
+        }
+
+        const FIELDS: &[&str] = &[
+            "font",
+            "background_color", 
+            "border",
+            "border_width",
+            "preserve_line_breaks",
+            "line_spacing",
+            "paragraph_spacing",
+        ];
+        deserializer.deserialize_struct("CodeBlockStyle", FIELDS, CodeBlockStyleVisitor)
+    }
 }
 
 impl CodeBlockStyle {
@@ -189,6 +320,9 @@ impl CodeBlockStyle {
         }
         if self.line_spacing <= 0.0 || self.paragraph_spacing < 0.0 {
             return Err(ValidationError::InvalidSpacing);
+        }
+        if self.border_width < 0.0 {
+            return Err(ValidationError::InvalidBorderWidth);
         }
         Ok(())
     }
@@ -359,7 +493,7 @@ impl Default for StyleConfig {
                     italic: false,
                 },
                 background_color: Some("#f5f5f5".to_string()),
-                border: true,
+                border_width: 1.0,
                 preserve_line_breaks: true,
                 line_spacing: 1.0,
                 paragraph_spacing: 6.0,
@@ -732,6 +866,209 @@ mod tests {
     }
 
     #[test]
+    fn test_invalid_border_width() {
+        let mut config = ConversionConfig::default();
+        config.styles.code_block.border_width = -1.0;
+
+        let result = config.validate();
+        assert!(result.is_err());
+        assert!(matches!(
+            result.unwrap_err(),
+            ValidationError::InvalidBorderWidth
+        ));
+    }
+
+    #[test]
+    fn test_valid_border_width_values() {
+        let mut config = ConversionConfig::default();
+        
+        // Test zero border width (no border)
+        config.styles.code_block.border_width = 0.0;
+        assert!(config.validate().is_ok());
+        
+        // Test positive border width
+        config.styles.code_block.border_width = 2.5;
+        assert!(config.validate().is_ok());
+        
+        // Test default border width
+        config.styles.code_block.border_width = 1.0;
+        assert!(config.validate().is_ok());
+    }
+
+    #[test]
+    fn test_code_block_backward_compatibility_border_true() {
+        // Test old format with border: true
+        let old_config_yaml = "
+font:
+  family: \"Courier New\"
+  size: 10.0
+  bold: false
+  italic: false
+background_color: \"#f5f5f5\"
+border: true
+preserve_line_breaks: true
+line_spacing: 1.0
+paragraph_spacing: 6.0
+";
+
+        let config: CodeBlockStyle = serde_yaml::from_str(old_config_yaml).unwrap();
+        assert_eq!(config.border_width, 1.0);
+        assert!(config.validate().is_ok());
+    }
+
+    #[test]
+    fn test_code_block_backward_compatibility_border_false() {
+        // Test old format with border: false
+        let old_config_yaml = "
+font:
+  family: \"Courier New\"
+  size: 10.0
+  bold: false
+  italic: false
+background_color: \"#f5f5f5\"
+border: false
+preserve_line_breaks: true
+line_spacing: 1.0
+paragraph_spacing: 6.0
+";
+
+        let config: CodeBlockStyle = serde_yaml::from_str(old_config_yaml).unwrap();
+        assert_eq!(config.border_width, 0.0);
+        assert!(config.validate().is_ok());
+    }
+
+    #[test]
+    fn test_code_block_new_border_width_format() {
+        // Test new format with border_width
+        let new_config_yaml = "
+font:
+  family: \"Courier New\"
+  size: 10.0
+  bold: false
+  italic: false
+background_color: \"#f5f5f5\"
+border_width: 2.5
+preserve_line_breaks: true
+line_spacing: 1.0
+paragraph_spacing: 6.0
+";
+
+        let config: CodeBlockStyle = serde_yaml::from_str(new_config_yaml).unwrap();
+        assert_eq!(config.border_width, 2.5);
+        assert!(config.validate().is_ok());
+    }
+
+    #[test]
+    fn test_code_block_border_width_takes_precedence() {
+        // Test that border_width takes precedence when both are present
+        let mixed_config_yaml = "
+font:
+  family: \"Courier New\"
+  size: 10.0
+  bold: false
+  italic: false
+background_color: \"#f5f5f5\"
+border: true
+border_width: 3.0
+preserve_line_breaks: true
+line_spacing: 1.0
+paragraph_spacing: 6.0
+";
+
+        let config: CodeBlockStyle = serde_yaml::from_str(mixed_config_yaml).unwrap();
+        assert_eq!(config.border_width, 3.0); // border_width should take precedence
+        assert!(config.validate().is_ok());
+    }
+
+    #[test]
+    fn test_code_block_no_border_properties() {
+        // Test that default border_width is used when neither property is present
+        let minimal_config_yaml = "
+font:
+  family: \"Courier New\"
+  size: 10.0
+  bold: false
+  italic: false
+";
+
+        let config: CodeBlockStyle = serde_yaml::from_str(minimal_config_yaml).unwrap();
+        assert_eq!(config.border_width, 1.0); // Default value
+        assert_eq!(config.preserve_line_breaks, true); // Default value
+        assert_eq!(config.line_spacing, 1.0); // Default value
+        assert_eq!(config.paragraph_spacing, 6.0); // Default value
+        assert!(config.validate().is_ok());
+    }
+
+    #[test]
+    fn test_code_block_json_backward_compatibility() {
+        // Test JSON format with old border property
+        let old_config_json = "{
+  \"font\": {
+    \"family\": \"Courier New\",
+    \"size\": 10.0,
+    \"bold\": false,
+    \"italic\": false
+  },
+  \"background_color\": \"#f5f5f5\",
+  \"border\": true,
+  \"preserve_line_breaks\": true,
+  \"line_spacing\": 1.0,
+  \"paragraph_spacing\": 6.0
+}";
+
+        let config: CodeBlockStyle = serde_json::from_str(old_config_json).unwrap();
+        assert_eq!(config.border_width, 1.0);
+        assert!(config.validate().is_ok());
+
+        // Test JSON format with new border_width property
+        let new_config_json = "{
+  \"font\": {
+    \"family\": \"Courier New\",
+    \"size\": 10.0,
+    \"bold\": false,
+    \"italic\": false
+  },
+  \"background_color\": \"#f5f5f5\",
+  \"border_width\": 2.0,
+  \"preserve_line_breaks\": true,
+  \"line_spacing\": 1.0,
+  \"paragraph_spacing\": 6.0
+}";
+
+        let config: CodeBlockStyle = serde_json::from_str(new_config_json).unwrap();
+        assert_eq!(config.border_width, 2.0);
+        assert!(config.validate().is_ok());
+    }
+
+    #[test]
+    fn test_code_block_serialization_uses_new_format() {
+        // Test that serialization always uses the new border_width format
+        let config = CodeBlockStyle {
+            font: FontConfig {
+                family: "Courier New".to_string(),
+                size: 10.0,
+                bold: false,
+                italic: false,
+            },
+            background_color: Some("#f5f5f5".to_string()),
+            border_width: 1.5,
+            preserve_line_breaks: true,
+            line_spacing: 1.0,
+            paragraph_spacing: 6.0,
+        };
+
+        // Test JSON serialization
+        let json = serde_json::to_string(&config).unwrap();
+        assert!(json.contains("border_width"));
+        assert!(!json.contains("\"border\":"));
+
+        // Test YAML serialization
+        let yaml = serde_yaml::to_string(&config).unwrap();
+        assert!(yaml.contains("border_width"));
+        assert!(!yaml.contains("border:"));
+    }
+
+    #[test]
     fn test_code_block_backward_compatibility() {
         // Test that old configurations without the new fields can still be loaded
         let old_config_yaml = "
@@ -774,7 +1111,10 @@ styles:
       bold: false
       italic: false
     background_color: \"#f5f5f5\"
-    border: true
+    border_width: 1.0
+    preserve_line_breaks: true
+    line_spacing: 1.0
+    paragraph_spacing: 6.0
   table:
     header_font:
       family: \"Times New Roman\"
@@ -799,9 +1139,9 @@ elements:
     underline: true
 ";
 
-        // This should fail to deserialize because the new fields are required
+        // This should now work since we updated the config to include all required fields
         let result: Result<ConversionConfig, _> = serde_yaml::from_str(old_config_yaml);
-        assert!(result.is_err(), "Old config without new fields should fail to deserialize");
+        assert!(result.is_ok(), "Config with all required fields should deserialize successfully");
         
         // But if we use the default config and serialize/deserialize, it should work
         let default_config = ConversionConfig::default();
@@ -809,9 +1149,216 @@ elements:
         let deserialized: ConversionConfig = serde_yaml::from_str(&yaml).unwrap();
         assert!(deserialized.validate().is_ok());
         
-        // The new fields should have their default values
+        // The fields should have the values from the config
         assert_eq!(deserialized.styles.code_block.preserve_line_breaks, true);
         assert_eq!(deserialized.styles.code_block.line_spacing, 1.0);
         assert_eq!(deserialized.styles.code_block.paragraph_spacing, 6.0);
+        assert_eq!(deserialized.styles.code_block.border_width, 1.0);
+    }
+
+    #[test]
+    fn test_code_block_border_width_precedence() {
+        // Test that new border_width property takes precedence when both old and new are present
+        let config_with_both_yaml = "
+font:
+  family: \"Courier New\"
+  size: 10.0
+  bold: false
+  italic: false
+background_color: \"#f5f5f5\"
+border: true
+border_width: 2.5
+preserve_line_breaks: true
+line_spacing: 1.0
+paragraph_spacing: 6.0
+";
+
+        let config: CodeBlockStyle = serde_yaml::from_str(config_with_both_yaml).unwrap();
+        assert_eq!(config.border_width, 2.5); // Should use border_width, not convert from border
+        assert!(config.validate().is_ok());
+    }
+
+    #[test]
+    fn test_code_block_default_border_width() {
+        // Test that default configuration uses border_width: 1.0
+        let default_config = ConversionConfig::default();
+        assert_eq!(default_config.styles.code_block.border_width, 1.0);
+        assert!(default_config.validate().is_ok());
+    }
+
+    #[test]
+    fn test_code_block_border_width_validation_edge_cases() {
+        let mut config = ConversionConfig::default();
+        
+        // Test zero border width (should be valid)
+        config.styles.code_block.border_width = 0.0;
+        assert!(config.validate().is_ok());
+        
+        // Test very small positive border width
+        config.styles.code_block.border_width = 0.1;
+        assert!(config.validate().is_ok());
+        
+        // Test large border width
+        config.styles.code_block.border_width = 10.0;
+        assert!(config.validate().is_ok());
+        
+        // Test negative border width (should be invalid)
+        config.styles.code_block.border_width = -0.1;
+        let result = config.validate();
+        assert!(result.is_err());
+        assert!(matches!(
+            result.unwrap_err(),
+            ValidationError::InvalidBorderWidth
+        ));
+        
+        // Test very negative border width
+        config.styles.code_block.border_width = -5.0;
+        let result = config.validate();
+        assert!(result.is_err());
+        assert!(matches!(
+            result.unwrap_err(),
+            ValidationError::InvalidBorderWidth
+        ));
+    }
+
+    #[test]
+    fn test_code_block_missing_border_properties() {
+        // Test configuration with neither border nor border_width (should use default)
+        let minimal_config_yaml = "
+font:
+  family: \"Courier New\"
+  size: 10.0
+  bold: false
+  italic: false
+";
+
+        let config: CodeBlockStyle = serde_yaml::from_str(minimal_config_yaml).unwrap();
+        assert_eq!(config.border_width, 1.0); // Should use default value
+        assert!(config.validate().is_ok());
+    }
+
+    #[test]
+    fn test_code_block_json_backward_compatibility_new() {
+        // Test backward compatibility with JSON format
+        let old_config_json = "{
+            \"font\": {
+                \"family\": \"Courier New\",
+                \"size\": 10.0,
+                \"bold\": false,
+                \"italic\": false
+            },
+            \"background_color\": \"#f0f0f0\",
+            \"border\": true,
+            \"preserve_line_breaks\": true,
+            \"line_spacing\": 1.0,
+            \"paragraph_spacing\": 6.0
+        }";
+
+        let config: CodeBlockStyle = serde_json::from_str(old_config_json).unwrap();
+        assert_eq!(config.border_width, 1.0);
+        assert!(config.validate().is_ok());
+
+        // Test with border: false
+        let old_config_json_false = "{
+            \"font\": {
+                \"family\": \"Courier New\",
+                \"size\": 10.0,
+                \"bold\": false,
+                \"italic\": false
+            },
+            \"border\": false,
+            \"preserve_line_breaks\": true,
+            \"line_spacing\": 1.0,
+            \"paragraph_spacing\": 6.0
+        }";
+
+        let config: CodeBlockStyle = serde_json::from_str(old_config_json_false).unwrap();
+        assert_eq!(config.border_width, 0.0);
+        assert!(config.validate().is_ok());
+    }
+
+    #[test]
+    fn test_code_block_new_format_serialization() {
+        // Test that new format serializes and deserializes correctly
+        let mut config = ConversionConfig::default();
+        config.styles.code_block.border_width = 2.5;
+
+        // Test YAML serialization
+        let yaml = serde_yaml::to_string(&config.styles.code_block).unwrap();
+        let deserialized: CodeBlockStyle = serde_yaml::from_str(&yaml).unwrap();
+        assert_eq!(deserialized.border_width, 2.5);
+        assert!(deserialized.validate().is_ok());
+
+        // Test JSON serialization
+        let json = serde_json::to_string(&config.styles.code_block).unwrap();
+        let deserialized: CodeBlockStyle = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized.border_width, 2.5);
+        assert!(deserialized.validate().is_ok());
+
+        // Verify that serialized format uses border_width, not border
+        assert!(yaml.contains("border_width"));
+        assert!(!yaml.contains("border:"));
+        assert!(json.contains("border_width"));
+        assert!(!json.contains("\"border\":"));
+    }
+
+    #[test]
+    fn test_code_block_validation_with_all_properties() {
+        // Test validation with all properties set to valid values
+        let config = CodeBlockStyle {
+            font: FontConfig {
+                family: "Courier New".to_string(),
+                size: 10.0,
+                bold: false,
+                italic: false,
+            },
+            background_color: Some("#f5f5f5".to_string()),
+            border_width: 1.5,
+            preserve_line_breaks: true,
+            line_spacing: 1.2,
+            paragraph_spacing: 8.0,
+        };
+
+        assert!(config.validate().is_ok());
+
+        // Test with invalid font
+        let mut invalid_config = config.clone();
+        invalid_config.font.size = 0.0;
+        let result = invalid_config.validate();
+        assert!(result.is_err());
+        assert!(matches!(
+            result.unwrap_err(),
+            ValidationError::InvalidFontSize
+        ));
+
+        // Test with invalid background color
+        let mut invalid_config = config.clone();
+        invalid_config.background_color = Some("invalid-color".to_string());
+        let result = invalid_config.validate();
+        assert!(result.is_err());
+        assert!(matches!(
+            result.unwrap_err(),
+            ValidationError::InvalidColor(_)
+        ));
+
+        // Test with invalid line spacing
+        let mut invalid_config = config.clone();
+        invalid_config.line_spacing = 0.0;
+        let result = invalid_config.validate();
+        assert!(result.is_err());
+        assert!(matches!(
+            result.unwrap_err(),
+            ValidationError::InvalidSpacing
+        ));
+
+        // Test with invalid paragraph spacing
+        let mut invalid_config = config.clone();
+        invalid_config.paragraph_spacing = -1.0;
+        let result = invalid_config.validate();
+        assert!(result.is_err());
+        assert!(matches!(
+            result.unwrap_err(),
+            ValidationError::InvalidSpacing
+        ));
     }
 }

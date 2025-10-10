@@ -58,7 +58,7 @@ styles:
       bold: false
       italic: false
     background_color: "#f5f5f5"
-    border: true
+    border_width: 1.0             # Border width in points (0.0 for no border)
     preserve_line_breaks: true    # Preserve original line breaks in code blocks
     line_spacing: 1.0             # Line spacing within code blocks
     paragraph_spacing: 6.0        # Spacing between code block paragraphs
