@@ -143,7 +143,7 @@ impl DocxGenerator {
     /// Add a paragraph to the document
     fn add_paragraph(&self, mut docx: Docx, content: &[InlineElement]) -> Result<Docx, ConversionError> {
         let mut paragraph = Paragraph::new()
-        .indent(None, Some(SpecialIndentType::FirstLine(720)), None, None);
+        .indent(None, Some(SpecialIndentType::FirstLine(315)), None, None);
         
         for inline in content {
             let run = self.create_run_from_inline(inline)?;

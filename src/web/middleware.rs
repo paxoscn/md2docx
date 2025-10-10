@@ -257,7 +257,7 @@ mod tests {
     #[test]
     fn test_resource_config_default() {
         let config = ResourceConfig::default();
-        assert_eq!(config.max_memory_mb, 1024);
+        assert_eq!(config.max_memory_mb, 102400);
         assert_eq!(config.max_cpu_percent, 80.0);
         assert_eq!(config.request_timeout_seconds, 60);
         assert_eq!(config.rate_limit_per_minute, 60);
