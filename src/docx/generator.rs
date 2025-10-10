@@ -261,14 +261,21 @@ impl DocxGenerator {
 
         // Apply paragraph spacing - for now, we'll skip this as docx-rs API is different
         // TODO: Implement proper spacing when docx-rs API is clarified
-        // Add spacing before code block using empty paragraph
+        // Add spacing before heading using empty paragraph
         // Since docx-rs doesn't support paragraph spacing directly, we use empty paragraphs
         let spacing_before = Paragraph::new()
         .add_run(Run::new().add_text("\u{00A0}")) // Non-breaking space for minimal visibility
-        .size(6); // Small font size for minimal visual impact
+        .size(1); // Small font size for minimal visual impact
         docx = docx.add_paragraph(spacing_before);
 
         docx = docx.add_paragraph(paragraph);
+
+        // Add spacing after heading using empty paragraph
+        let spacing_after = Paragraph::new()
+            .add_run(Run::new().add_text("\u{00A0}")) // Non-breaking space for minimal visibility
+            .size(1); // Small font size for minimal visual impact
+        docx = docx.add_paragraph(spacing_after);
+
         Ok(docx)
     }
 
@@ -406,7 +413,7 @@ impl DocxGenerator {
         // Since docx-rs doesn't support paragraph spacing directly, we use empty paragraphs
         let spacing_before = Paragraph::new()
             .add_run(Run::new().add_text("\u{00A0}")) // Non-breaking space for minimal visibility
-            .size(6); // Small font size for minimal visual impact
+            .size(1); // Small font size for minimal visual impact
         docx = docx.add_paragraph(spacing_before);
 
         // Create table cell with code content using the helper method
@@ -430,7 +437,7 @@ impl DocxGenerator {
         // Add spacing after code block using empty paragraph
         let spacing_after = Paragraph::new()
             .add_run(Run::new().add_text("\u{00A0}")) // Non-breaking space for minimal visibility
-            .size(6); // Small font size for minimal visual impact
+            .size(1); // Small font size for minimal visual impact
         docx = docx.add_paragraph(spacing_after);
 
         Ok(docx)
