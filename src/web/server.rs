@@ -17,7 +17,7 @@ use tracing::{info, warn};
 
 /// Web server for the conversion API
 pub struct WebServer {
-    conversion_engine: Arc<ConversionEngine>,
+    conversion_engine: Arc<tokio::sync::Mutex<ConversionEngine>>,
     port: u16,
     resource_config: ResourceConfig,
     task_queue_manager: Option<Arc<TaskQueueManager>>,
@@ -27,7 +27,7 @@ impl WebServer {
     /// Create a new web server
     pub fn new(conversion_engine: ConversionEngine, port: u16) -> Self {
         Self {
-            conversion_engine: Arc::new(conversion_engine),
+            conversion_engine: Arc::new(tokio::sync::Mutex::new(conversion_engine)),
             port,
             resource_config: ResourceConfig::default(),
             task_queue_manager: None,
@@ -41,7 +41,7 @@ impl WebServer {
         resource_config: ResourceConfig,
     ) -> Self {
         Self {
-            conversion_engine: Arc::new(conversion_engine),
+            conversion_engine: Arc::new(tokio::sync::Mutex::new(conversion_engine)),
             port,
             resource_config,
             task_queue_manager: None,

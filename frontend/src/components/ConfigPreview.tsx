@@ -1,4 +1,6 @@
+import { useMemo } from 'react';
 import type { ConversionConfig } from '../types';
+import { generateNumberingPreview, validateNumberingFormat } from '../utils/numbering';
 
 interface ConfigPreviewProps {
   config: ConversionConfig | null;
@@ -7,6 +9,38 @@ interface ConfigPreviewProps {
 }
 
 export function ConfigPreview({ config, error, isValidating }: ConfigPreviewProps) {
+  // Generate numbering preview when config changes
+  const numberingPreview = useMemo(() => {
+    if (!config) return [];
+    
+    const headingConfigs: Record<number, { numbering?: string }> = {};
+    Object.entries(config.styles.headings).forEach(([level, style]) => {
+      headingConfigs[parseInt(level)] = { numbering: style.numbering };
+    });
+    
+    return generateNumberingPreview(headingConfigs);
+  }, [config]);
+
+  // Check for numbering format errors
+  const numberingErrors = useMemo(() => {
+    if (!config) return [];
+    
+    const errors: Array<{ level: number; error: string }> = [];
+    Object.entries(config.styles.headings).forEach(([level, style]) => {
+      if (style.numbering) {
+        const validation = validateNumberingFormat(style.numbering);
+        if (!validation.valid) {
+          errors.push({
+            level: parseInt(level),
+            error: validation.error || 'Invalid format',
+          });
+        }
+      }
+    });
+    
+    return errors;
+  }, [config]);
+
   if (isValidating) {
     return (
       <div className="bg-gray-50 rounded-lg p-4">
@@ -88,18 +122,81 @@ export function ConfigPreview({ config, error, isValidating }: ConfigPreviewProp
         <div className="bg-white rounded-md p-3 border border-green-200">
           <h4 className="font-medium text-green-900 mb-2">Heading Styles</h4>
           <div className="space-y-2">
-            {Object.entries(config.styles.headings).map(([level, style]) => (
-              <div key={level} className="flex items-center justify-between text-xs">
-                <span className="text-gray-600">H{level}:</span>
-                <span className="font-mono">
-                  {style.font.name} {style.font.size}pt
-                  {style.bold && <span className="ml-1 font-bold">Bold</span>}
-                  {style.color && <span className="ml-1" style={{ color: style.color }}>●</span>}
-                </span>
-              </div>
-            ))}
+            {Object.entries(config.styles.headings).map(([level, style]) => {
+              const levelNum = parseInt(level);
+              const hasNumberingError = numberingErrors.find(e => e.level === levelNum);
+              
+              return (
+                <div key={level} className="text-xs">
+                  <div className="flex items-center justify-between">
+                    <span className="text-gray-600">H{level}:</span>
+                    <span className="font-mono">
+                      {style.font.name} {style.font.size}pt
+                      {style.bold && <span className="ml-1 font-bold">Bold</span>}
+                      {style.color && <span className="ml-1" style={{ color: style.color }}>●</span>}
+                    </span>
+                  </div>
+                  {style.numbering && (
+                    <div className="mt-1 ml-2">
+                      {hasNumberingError ? (
+                        <div className="text-red-600 bg-red-50 px-2 py-1 rounded text-xs">
+                          <span className="font-medium">Numbering Error:</span> {hasNumberingError.error}
+                        </div>
+                      ) : (
+                        <div className="text-blue-600 bg-blue-50 px-2 py-1 rounded">
+                          <span className="font-medium">Numbering:</span> {style.numbering}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
+
+        {/* Numbering Preview */}
+        {numberingPreview.some(h => h.numbering) && (
+          <div className="bg-white rounded-md p-3 border border-green-200">
+            <h4 className="font-medium text-green-900 mb-2">Numbering Preview</h4>
+            <div className="space-y-1 text-xs">
+              {numberingPreview.map((heading, index) => (
+                <div 
+                  key={index} 
+                  className="flex items-start"
+                  style={{ marginLeft: `${(heading.level - 1) * 12}px` }}
+                >
+                  <span className="font-mono text-blue-600 mr-2 min-w-0 flex-shrink-0">
+                    {heading.numbering}
+                  </span>
+                  <span className="text-gray-700 truncate">
+                    {heading.text}
+                  </span>
+                </div>
+              ))}
+            </div>
+            <div className="mt-2 text-xs text-gray-500">
+              This preview shows how numbering will appear in your document
+            </div>
+          </div>
+        )}
+
+        {/* Numbering Errors */}
+        {numberingErrors.length > 0 && (
+          <div className="bg-red-50 rounded-md p-3 border border-red-200">
+            <h4 className="font-medium text-red-900 mb-2">Numbering Configuration Errors</h4>
+            <div className="space-y-1 text-xs">
+              {numberingErrors.map((error, index) => (
+                <div key={index} className="text-red-700">
+                  <span className="font-medium">H{error.level}:</span> {error.error}
+                </div>
+              ))}
+            </div>
+            <div className="mt-2 text-xs text-red-600">
+              Please fix these errors for proper numbering functionality
+            </div>
+          </div>
+        )}
 
         {/* Text Styles */}
         <div className="bg-white rounded-md p-3 border border-green-200">

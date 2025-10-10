@@ -38,6 +38,7 @@ pub fn create_test_config() -> ConversionConfig {
                     spacing_before: 12.0,
                     spacing_after: 6.0,
                     alignment: None,
+                    numbering: None,
                 });
                 headings.insert(2, HeadingStyle {
                     font: FontConfig {
@@ -49,6 +50,7 @@ pub fn create_test_config() -> ConversionConfig {
                     spacing_before: 10.0,
                     spacing_after: 5.0,
                     alignment: None,
+                    numbering: None,
                 });
                 headings
             },

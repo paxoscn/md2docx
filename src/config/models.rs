@@ -1,5 +1,6 @@
 //! Configuration data models
 
+use crate::numbering::NumberingFormatter;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use thiserror::Error;
@@ -23,6 +24,8 @@ pub enum ValidationError {
     InvalidColor(String),
     #[error("Invalid image dimensions: must be positive")]
     InvalidImageDimensions,
+    #[error("Invalid numbering format: {0}")]
+    InvalidNumberingFormat(String),
 }
 
 /// Main configuration structure for conversion
@@ -123,6 +126,7 @@ pub struct HeadingStyle {
     pub spacing_before: f32,
     pub spacing_after: f32,
     pub alignment: Option<String>,
+    pub numbering: Option<String>,
 }
 
 impl HeadingStyle {
@@ -132,6 +136,16 @@ impl HeadingStyle {
         if self.spacing_before < 0.0 || self.spacing_after < 0.0 {
             return Err(ValidationError::InvalidSpacing);
         }
+
+        // Validate numbering format if present
+        if let Some(numbering) = &self.numbering {
+            if let Err(numbering_error) = NumberingFormatter::parse_format(numbering) {
+                return Err(ValidationError::InvalidNumberingFormat(
+                    numbering_error.to_string(),
+                ));
+            }
+        }
+
         Ok(())
     }
 }
@@ -278,7 +292,7 @@ impl StyleConfig {
             }
             style.validate()?;
         }
-        
+
         self.paragraph.validate()?;
         self.code_block.validate()?;
         self.table.validate()?;
@@ -289,7 +303,7 @@ impl StyleConfig {
 impl Default for StyleConfig {
     fn default() -> Self {
         let mut headings = HashMap::new();
-        
+
         // Default heading styles
         for level in 1..=6 {
             let size = match level {
@@ -301,20 +315,24 @@ impl Default for StyleConfig {
                 6 => 10.0,
                 _ => 12.0,
             };
-            
-            headings.insert(level, HeadingStyle {
-                font: FontConfig {
-                    family: "Times New Roman".to_string(),
-                    size,
-                    bold: true,
-                    italic: false,
+
+            headings.insert(
+                level,
+                HeadingStyle {
+                    font: FontConfig {
+                        family: "Times New Roman".to_string(),
+                        size,
+                        bold: true,
+                        italic: false,
+                    },
+                    spacing_before: 12.0,
+                    spacing_after: 6.0,
+                    alignment: None,
+                    numbering: None,
                 },
-                spacing_before: 12.0,
-                spacing_after: 6.0,
-                alignment: None,
-            });
+            );
         }
-        
+
         Self {
             headings,
             paragraph: ParagraphStyle {
@@ -438,56 +456,71 @@ mod tests {
     fn test_invalid_page_size() {
         let mut config = ConversionConfig::default();
         config.document.page_size.width = -100.0;
-        
+
         let result = config.validate();
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), ValidationError::InvalidPageSize));
+        assert!(matches!(
+            result.unwrap_err(),
+            ValidationError::InvalidPageSize
+        ));
     }
 
     #[test]
     fn test_invalid_margins() {
         let mut config = ConversionConfig::default();
         config.document.margins.top = -10.0;
-        
+
         let result = config.validate();
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), ValidationError::InvalidMargins));
+        assert!(matches!(
+            result.unwrap_err(),
+            ValidationError::InvalidMargins
+        ));
     }
 
     #[test]
     fn test_invalid_font_size() {
         let mut config = ConversionConfig::default();
         config.document.default_font.size = 0.0;
-        
+
         let result = config.validate();
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), ValidationError::InvalidFontSize));
+        assert!(matches!(
+            result.unwrap_err(),
+            ValidationError::InvalidFontSize
+        ));
     }
 
     #[test]
     fn test_invalid_font_family() {
         let mut config = ConversionConfig::default();
         config.document.default_font.family = "".to_string();
-        
+
         let result = config.validate();
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), ValidationError::InvalidFontFamily));
+        assert!(matches!(
+            result.unwrap_err(),
+            ValidationError::InvalidFontFamily
+        ));
     }
 
     #[test]
     fn test_invalid_color() {
         let mut config = ConversionConfig::default();
         config.elements.link.color = "invalid-color".to_string();
-        
+
         let result = config.validate();
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), ValidationError::InvalidColor(_)));
+        assert!(matches!(
+            result.unwrap_err(),
+            ValidationError::InvalidColor(_)
+        ));
     }
 
     #[test]
     fn test_valid_color_formats() {
         let valid_colors = vec!["#ff0000", "#00FF00", "#0000ff", "#123456"];
-        
+
         for color in valid_colors {
             let mut config = ConversionConfig::default();
             config.elements.link.color = color.to_string();
@@ -498,15 +531,112 @@ mod tests {
     #[test]
     fn test_serde_serialization() {
         let config = ConversionConfig::default();
-        
+
         // Test JSON serialization
         let json = serde_json::to_string(&config).unwrap();
         let deserialized: ConversionConfig = serde_json::from_str(&json).unwrap();
         assert!(deserialized.validate().is_ok());
-        
+
         // Test YAML serialization
         let yaml = serde_yaml::to_string(&config).unwrap();
         let deserialized: ConversionConfig = serde_yaml::from_str(&yaml).unwrap();
         assert!(deserialized.validate().is_ok());
+    }
+
+    #[test]
+    fn test_heading_numbering_validation() {
+        let mut config = ConversionConfig::default();
+
+        // Test valid numbering formats
+        let valid_formats = vec!["%1.", "%1.%2.", "%1.%2.%3", "%1-%2-%3"];
+        for format in valid_formats {
+            config.styles.headings.get_mut(&1).unwrap().numbering = Some(format.to_string());
+            assert!(
+                config.validate().is_ok(),
+                "Format '{}' should be valid",
+                format
+            );
+        }
+
+        // Test invalid numbering formats
+        let invalid_formats = vec!["", "no placeholders", "%1.%3.", "%2.%3.", "%0.", "%7."];
+        for format in invalid_formats {
+            config.styles.headings.get_mut(&1).unwrap().numbering = Some(format.to_string());
+            let result = config.validate();
+            assert!(result.is_err(), "Format '{}' should be invalid", format);
+            assert!(matches!(
+                result.unwrap_err(),
+                ValidationError::InvalidNumberingFormat(_)
+            ));
+        }
+
+        // Test None numbering (should be valid)
+        config.styles.headings.get_mut(&1).unwrap().numbering = None;
+        assert!(config.validate().is_ok());
+    }
+
+    #[test]
+    fn test_numbering_field_serialization() {
+        let mut config = ConversionConfig::default();
+        config.styles.headings.get_mut(&1).unwrap().numbering = Some("%1.".to_string());
+        config.styles.headings.get_mut(&2).unwrap().numbering = Some("%1.%2.".to_string());
+
+        // Test JSON serialization with numbering
+        let json = serde_json::to_string(&config).unwrap();
+        let deserialized: ConversionConfig = serde_json::from_str(&json).unwrap();
+        assert!(deserialized.validate().is_ok());
+        assert_eq!(
+            deserialized.styles.headings.get(&1).unwrap().numbering,
+            Some("%1.".to_string())
+        );
+        assert_eq!(
+            deserialized.styles.headings.get(&2).unwrap().numbering,
+            Some("%1.%2.".to_string())
+        );
+        assert_eq!(
+            deserialized.styles.headings.get(&3).unwrap().numbering,
+            None
+        );
+
+        // Test YAML serialization with numbering
+        let yaml = serde_yaml::to_string(&config).unwrap();
+        let deserialized: ConversionConfig = serde_yaml::from_str(&yaml).unwrap();
+        assert!(deserialized.validate().is_ok());
+        assert_eq!(
+            deserialized.styles.headings.get(&1).unwrap().numbering,
+            Some("%1.".to_string())
+        );
+        assert_eq!(
+            deserialized.styles.headings.get(&2).unwrap().numbering,
+            Some("%1.%2.".to_string())
+        );
+        assert_eq!(
+            deserialized.styles.headings.get(&3).unwrap().numbering,
+            None
+        );
+    }
+
+    #[test]
+    fn test_backward_compatibility() {
+        // Test that configurations without numbering field still work
+        // Create a config programmatically to simulate old configs without numbering
+        let config = ConversionConfig::default();
+
+        // Verify that default config has numbering set to None (backward compatibility)
+        for level in 1..=6 {
+            assert_eq!(config.styles.headings.get(&level).unwrap().numbering, None);
+        }
+
+        // Verify that config without numbering is still valid
+        assert!(config.validate().is_ok());
+
+        // Test serialization/deserialization maintains None values
+        let json = serde_json::to_string(&config).unwrap();
+        let deserialized: ConversionConfig = serde_json::from_str(&json).unwrap();
+        assert!(deserialized.validate().is_ok());
+        assert_eq!(
+            deserialized.styles.headings.get(&1).unwrap().numbering,
+            None
+        );
     }
 }

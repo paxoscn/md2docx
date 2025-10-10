@@ -30,7 +30,7 @@ impl ConversionEngine {
 
     /// Convert Markdown string to docx bytes
     #[instrument(skip(self, markdown), fields(markdown_length = markdown.len()))]
-    pub async fn convert(&self, markdown: &str) -> Result<Vec<u8>, ConversionError> {
+    pub async fn convert(&mut self, markdown: &str) -> Result<Vec<u8>, ConversionError> {
         info!("Starting Markdown to docx conversion");
         debug!("Markdown content length: {} characters", markdown.len());
         
@@ -59,7 +59,7 @@ impl ConversionEngine {
 
     /// Convert Markdown file to docx file
     #[instrument(skip(self), fields(input_path, output_path))]
-    pub async fn convert_file(&self, input_path: &str, output_path: &str) -> Result<(), ConversionError> {
+    pub async fn convert_file(&mut self, input_path: &str, output_path: &str) -> Result<(), ConversionError> {
         info!("Starting file conversion from {} to {}", input_path, output_path);
         
         // Validate input file exists
@@ -111,7 +111,7 @@ impl ConversionEngine {
 
     /// Convert multiple Markdown files to docx files
     #[instrument(skip(self, files))]
-    pub async fn convert_batch(&self, files: &[(String, String)]) -> Result<Vec<Result<(), ConversionError>>, ConversionError> {
+    pub async fn convert_batch(&mut self, files: &[(String, String)]) -> Result<Vec<Result<(), ConversionError>>, ConversionError> {
         info!("Starting batch conversion of {} files", files.len());
         
         let mut results = Vec::new();
@@ -235,7 +235,7 @@ mod tests {
     #[tokio::test]
     async fn test_convert_simple_markdown() {
         let config = ConversionConfig::default();
-        let engine = ConversionEngine::new(config);
+        let mut engine = ConversionEngine::new(config);
         
         let markdown = "# Hello World\n\nThis is a **bold** paragraph.";
         let result = engine.convert(markdown).await;
@@ -248,7 +248,7 @@ mod tests {
     #[tokio::test]
     async fn test_convert_complex_markdown() {
         let config = ConversionConfig::default();
-        let engine = ConversionEngine::new(config);
+        let mut engine = ConversionEngine::new(config);
         
         let markdown = r#"
 # Main Title
@@ -295,7 +295,7 @@ That's all!
     #[tokio::test]
     async fn test_convert_file() {
         let config = ConversionConfig::default();
-        let engine = ConversionEngine::new(config);
+        let mut engine = ConversionEngine::new(config);
         
         // Create temporary directory
         let temp_dir = TempDir::new().unwrap();
@@ -323,7 +323,7 @@ That's all!
     #[tokio::test]
     async fn test_convert_file_nonexistent_input() {
         let config = ConversionConfig::default();
-        let engine = ConversionEngine::new(config);
+        let mut engine = ConversionEngine::new(config);
         
         let result = engine.convert_file("nonexistent.md", "output.docx").await;
         assert!(result.is_err());
@@ -337,7 +337,7 @@ That's all!
     #[tokio::test]
     async fn test_convert_batch() {
         let config = ConversionConfig::default();
-        let engine = ConversionEngine::new(config);
+        let mut engine = ConversionEngine::new(config);
         
         // Create temporary directory
         let temp_dir = TempDir::new().unwrap();

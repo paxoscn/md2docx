@@ -7,11 +7,12 @@ use axum::{
     Router,
 };
 use std::sync::Arc;
+use tokio::sync::Mutex;
 
 /// Combined application state
 #[derive(Clone)]
 pub struct AppState {
-    pub conversion_engine: Arc<ConversionEngine>,
+    pub conversion_engine: Arc<Mutex<ConversionEngine>>,
     pub task_queue: Option<Arc<TaskQueue>>,
 }
 
@@ -26,7 +27,8 @@ pub fn create_router(app_state: AppState) -> Router {
         .route("/api/convert/download", post(handlers::download_converted))
         // Configuration API routes
         .route("/api/config/update", post(handlers::update_config_natural))
-        .route("/api/config/preview", post(handlers::preview_config_update));
+        .route("/api/config/preview", post(handlers::preview_config_update))
+        .route("/api/config/validate", post(handlers::validate_config));
 
     // Add async routes only if task queue is available
     if app_state.task_queue.is_some() {

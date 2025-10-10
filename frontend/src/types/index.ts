@@ -44,6 +44,7 @@ export interface HeadingStyle {
   font: FontConfig;
   bold: boolean;
   color?: string;
+  numbering?: string;
 }
 
 export interface ParagraphStyle {
@@ -99,5 +100,16 @@ export interface ConfigUpdateRequest {
 export interface ConfigUpdateResponse {
   success: boolean;
   updated_config?: string;
+  error?: string;
+}
+
+export interface ConfigValidationRequest {
+  config: string;
+}
+
+export interface ConfigValidationResponse {
+  success: boolean;
+  valid: boolean;
+  parsed_config?: ConversionConfig;
   error?: string;
 }

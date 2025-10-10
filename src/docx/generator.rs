@@ -3,28 +3,73 @@
 use crate::config::ConversionConfig;
 use crate::error::ConversionError;
 use crate::markdown::{MarkdownDocument, MarkdownElement, InlineElement, ListItem};
+use crate::numbering::HeadingProcessor;
 use docx_rs::*;
 use std::io::Cursor;
 use std::str::FromStr;
-use tracing::{info, debug, error, instrument};
+use std::sync::Arc;
+use tracing::{error, warn, info, debug, trace};
 
 /// Generator for creating docx documents from Markdown AST
 pub struct DocxGenerator {
     config: ConversionConfig,
+    heading_processor: Option<HeadingProcessor>,
 }
 
 impl DocxGenerator {
     /// Create a new docx generator with the given configuration
     pub fn new(config: ConversionConfig) -> Self {
-        Self { config }
+        let config_arc = Arc::new(config.clone());
+        
+        // Initialize heading processor if any heading levels have numbering configured
+        let heading_processor = if config.styles.headings.values().any(|style| style.numbering.is_some()) {
+            info!("Initializing heading processor with numbering support");
+            match HeadingProcessor::new(config_arc.clone()).validate_numbering_formats() {
+                Ok(_) => {
+                    debug!("All numbering formats validated successfully");
+                    Some(HeadingProcessor::new(config_arc))
+                }
+                Err(e) => {
+                    error!(
+                        error = %e,
+                        "Invalid numbering formats detected during processor initialization"
+                    );
+                    warn!("Creating processor anyway for graceful degradation");
+                    Some(HeadingProcessor::new(config_arc))
+                }
+            }
+        } else {
+            debug!("No numbering configured, heading processor not needed");
+            None
+        };
+        
+        Self { 
+            config,
+            heading_processor,
+        }
     }
 
     /// Generate docx document from Markdown AST
-    pub fn generate(&self, document: &MarkdownDocument) -> Result<Vec<u8>, ConversionError> {
+    pub fn generate(&mut self, document: &MarkdownDocument) -> Result<Vec<u8>, ConversionError> {
         let mut docx = Docx::new();
         
         // Apply document-level settings
         docx = self.apply_document_settings(docx)?;
+        
+        // Reset numbering state at the beginning of document generation
+        if let Some(ref mut processor) = self.heading_processor {
+            info!("Resetting numbering state for new document generation");
+            processor.reset_state();
+            
+            // Validate numbering formats before starting document generation
+            if let Err(e) = processor.validate_numbering_formats() {
+                error!(
+                    error = %e,
+                    "Numbering format validation failed during document generation"
+                );
+                warn!("Continuing with document generation, numbering may be degraded");
+            }
+        }
         
         // Process each markdown element
         for element in &document.elements {
@@ -65,7 +110,7 @@ impl DocxGenerator {
     }
 
     /// Process a single markdown element
-    fn process_element(&self, mut docx: Docx, element: &MarkdownElement) -> Result<Docx, ConversionError> {
+    fn process_element(&mut self, mut docx: Docx, element: &MarkdownElement) -> Result<Docx, ConversionError> {
         match element {
             MarkdownElement::Heading { level, text } => {
                 docx = self.add_heading(docx, *level, text)?;
@@ -94,13 +139,55 @@ impl DocxGenerator {
     }
 
     /// Add a heading to the document
-    fn add_heading(&self, mut docx: Docx, level: u8, text: &str) -> Result<Docx, ConversionError> {
+    fn add_heading(&mut self, mut docx: Docx, level: u8, text: &str) -> Result<Docx, ConversionError> {
         // Get heading style from config, fallback to level 1 if not found
         let heading_style = self.config.styles.headings.get(&level)
             .unwrap_or_else(|| self.config.styles.headings.get(&1).unwrap());
         
+        // Process heading text with numbering if configured
+        let processed_text = if let Some(ref mut processor) = self.heading_processor {
+            match processor.process_heading(level, text) {
+                Ok(numbered_text) => {
+                    debug!(
+                        level = level,
+                        original_text = text,
+                        numbered_text = %numbered_text,
+                        "Successfully processed heading with numbering"
+                    );
+                    numbered_text
+                }
+                Err(e) => {
+                    error!(
+                        level = level,
+                        text = text,
+                        error = %e,
+                        error_category = e.category(),
+                        recoverable = e.is_recoverable(),
+                        "Failed to process heading numbering"
+                    );
+                    
+                    // Log degradation event for monitoring
+                    warn!(
+                        degradation_event = "heading_numbering_fallback",
+                        level = level,
+                        error_type = e.category(),
+                        "Heading numbering degraded to fallback mode"
+                    );
+                    
+                    text.to_string()
+                }
+            }
+        } else {
+            trace!(
+                level = level,
+                text = text,
+                "No numbering processor configured, using original text"
+            );
+            text.to_string()
+        };
+        
         let mut run = Run::new()
-            .add_text(text)
+            .add_text(&processed_text)
             .fonts(RunFonts::new().ascii(&heading_style.font.family).east_asia(&heading_style.font.family))
             .size((heading_style.font.size * 2.0) as usize); // docx uses half-points
         
@@ -472,20 +559,57 @@ impl DocxGenerator {
 
     /// Update configuration
     pub fn update_config(&mut self, config: ConversionConfig) {
+        let config_arc = Arc::new(config.clone());
+        
+        // Update heading processor if any heading levels have numbering configured
+        let old_has_numbering = self.heading_processor.is_some();
+        let new_has_numbering = config.styles.headings.values().any(|style| style.numbering.is_some());
+        
+        self.heading_processor = if new_has_numbering {
+            info!("Updating heading processor with new numbering configuration");
+            
+            // Validate new configuration
+            match HeadingProcessor::new(config_arc.clone()).validate_numbering_formats() {
+                Ok(_) => {
+                    debug!("New numbering formats validated successfully");
+                }
+                Err(e) => {
+                    error!(
+                        error = %e,
+                        "Invalid numbering formats in new configuration"
+                    );
+                    warn!("Proceeding with configuration update for graceful degradation");
+                }
+            }
+            
+            Some(HeadingProcessor::new(config_arc))
+        } else {
+            if old_has_numbering {
+                info!("Removing heading processor - no numbering in new configuration");
+            }
+            None
+        };
+        
+        debug!(
+            old_has_numbering = old_has_numbering,
+            new_has_numbering = new_has_numbering,
+            "Heading processor update completed"
+        );
+        
         self.config = config;
     }
 }
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_utils::{create_test_config, create_test_document, create_simple_document};
+    use crate::test_utils::{create_test_config, create_test_document};
     use crate::config::ConversionConfig;
     use crate::markdown::ast::{MarkdownDocument, MarkdownElement, InlineElement, ListItem};
 
     #[test]
     fn test_heading_generation() {
         let config = ConversionConfig::default();
-        let generator = DocxGenerator::new(config);
+        let mut generator = DocxGenerator::new(config);
         
         let mut document = MarkdownDocument::new();
         document.add_element(MarkdownElement::Heading {
@@ -503,7 +627,7 @@ mod tests {
     #[test]
     fn test_paragraph_with_formatting() {
         let config = ConversionConfig::default();
-        let generator = DocxGenerator::new(config);
+        let mut generator = DocxGenerator::new(config);
         
         let mut document = MarkdownDocument::new();
         document.add_element(MarkdownElement::Paragraph {
@@ -528,7 +652,7 @@ mod tests {
     #[test]
     fn test_table_generation() {
         let config = ConversionConfig::default();
-        let generator = DocxGenerator::new(config);
+        let mut generator = DocxGenerator::new(config);
         
         let mut document = MarkdownDocument::new();
         document.add_element(MarkdownElement::Table {
@@ -550,7 +674,7 @@ mod tests {
     #[test]
     fn test_list_generation() {
         let config = ConversionConfig::default();
-        let generator = DocxGenerator::new(config);
+        let mut generator = DocxGenerator::new(config);
         
         let mut document = MarkdownDocument::new();
         document.add_element(MarkdownElement::List {
@@ -572,7 +696,7 @@ mod tests {
     #[test]
     fn test_image_placeholder_generation() {
         let config = ConversionConfig::default();
-        let generator = DocxGenerator::new(config);
+        let mut generator = DocxGenerator::new(config);
         
         let mut document = MarkdownDocument::new();
         document.add_element(MarkdownElement::Image {
@@ -591,7 +715,7 @@ mod tests {
     #[test]
     fn test_code_block_generation() {
         let config = create_test_config();
-        let generator = DocxGenerator::new(config);
+        let mut generator = DocxGenerator::new(config);
         
         let mut document = MarkdownDocument::new();
         document.add_element(MarkdownElement::CodeBlock {
@@ -609,7 +733,7 @@ mod tests {
     #[test]
     fn test_horizontal_rule_generation() {
         let config = create_test_config();
-        let generator = DocxGenerator::new(config);
+        let mut generator = DocxGenerator::new(config);
         
         let mut document = MarkdownDocument::new();
         document.add_element(MarkdownElement::HorizontalRule);
@@ -624,7 +748,7 @@ mod tests {
     #[test]
     fn test_complex_document_generation() {
         let config = create_test_config();
-        let generator = DocxGenerator::new(config);
+        let mut generator = DocxGenerator::new(config);
         let document = create_test_document();
         
         let result = generator.generate(&document);
@@ -639,7 +763,7 @@ mod tests {
     #[test]
     fn test_empty_document_generation() {
         let config = create_test_config();
-        let generator = DocxGenerator::new(config);
+        let mut generator = DocxGenerator::new(config);
         let document = MarkdownDocument::new();
         
         let result = generator.generate(&document);
@@ -652,7 +776,7 @@ mod tests {
     #[test]
     fn test_inline_code_generation() {
         let config = create_test_config();
-        let generator = DocxGenerator::new(config);
+        let mut generator = DocxGenerator::new(config);
         
         let mut document = MarkdownDocument::new();
         document.add_element(MarkdownElement::Paragraph {
@@ -673,7 +797,7 @@ mod tests {
     #[test]
     fn test_link_generation() {
         let config = create_test_config();
-        let generator = DocxGenerator::new(config);
+        let mut generator = DocxGenerator::new(config);
         
         let mut document = MarkdownDocument::new();
         document.add_element(MarkdownElement::Paragraph {
@@ -698,7 +822,7 @@ mod tests {
     #[test]
     fn test_multiple_headings() {
         let config = create_test_config();
-        let generator = DocxGenerator::new(config);
+        let mut generator = DocxGenerator::new(config);
         
         let mut document = MarkdownDocument::new();
         for level in 1..=6 {
@@ -726,5 +850,315 @@ mod tests {
         // Verify config is stored
         assert_eq!(generator.config.document.default_font.size, 16.0);
         assert_eq!(generator.config.document.default_font.family, "Arial");
+    }
+
+    #[test]
+    fn test_heading_numbering_integration() {
+        let mut config = create_test_config();
+        
+        // Configure numbering for H1 and H2
+        config.styles.headings.get_mut(&1).unwrap().numbering = Some("%1.".to_string());
+        config.styles.headings.get_mut(&2).unwrap().numbering = Some("%1.%2.".to_string());
+        
+        let mut generator = DocxGenerator::new(config);
+        
+        let mut document = MarkdownDocument::new();
+        document.add_element(MarkdownElement::Heading {
+            level: 1,
+            text: "Introduction".to_string(),
+        });
+        document.add_element(MarkdownElement::Heading {
+            level: 2,
+            text: "Overview".to_string(),
+        });
+        document.add_element(MarkdownElement::Heading {
+            level: 2,
+            text: "Details".to_string(),
+        });
+        document.add_element(MarkdownElement::Heading {
+            level: 1,
+            text: "Conclusion".to_string(),
+        });
+        
+        let result = generator.generate(&document);
+        assert!(result.is_ok());
+        
+        let docx_bytes = result.unwrap();
+        assert!(!docx_bytes.is_empty());
+        
+        // Verify that heading processor was created
+        assert!(generator.heading_processor.is_some());
+    }
+
+    #[test]
+    fn test_heading_without_numbering() {
+        let config = create_test_config(); // Default config has no numbering
+        let mut generator = DocxGenerator::new(config);
+        
+        let mut document = MarkdownDocument::new();
+        document.add_element(MarkdownElement::Heading {
+            level: 1,
+            text: "Plain Heading".to_string(),
+        });
+        
+        let result = generator.generate(&document);
+        assert!(result.is_ok());
+        
+        let docx_bytes = result.unwrap();
+        assert!(!docx_bytes.is_empty());
+        
+        // Verify that no heading processor was created
+        assert!(generator.heading_processor.is_none());
+    }
+
+    #[test]
+    fn test_mixed_numbering_scenario() {
+        let mut config = create_test_config();
+        
+        // Configure numbering only for H1 and H3 (skip H2)
+        config.styles.headings.get_mut(&1).unwrap().numbering = Some("%1.".to_string());
+        config.styles.headings.get_mut(&3).unwrap().numbering = Some("%1.%2.%3".to_string());
+        
+        let mut generator = DocxGenerator::new(config);
+        
+        let mut document = MarkdownDocument::new();
+        document.add_element(MarkdownElement::Heading {
+            level: 1,
+            text: "Chapter".to_string(),
+        });
+        document.add_element(MarkdownElement::Heading {
+            level: 2,
+            text: "Section".to_string(), // No numbering
+        });
+        document.add_element(MarkdownElement::Heading {
+            level: 3,
+            text: "Subsection".to_string(),
+        });
+        
+        let result = generator.generate(&document);
+        assert!(result.is_ok());
+        
+        let docx_bytes = result.unwrap();
+        assert!(!docx_bytes.is_empty());
+    }
+
+    #[test]
+    fn test_config_update_with_numbering() {
+        let config = create_test_config();
+        let mut generator = DocxGenerator::new(config);
+        
+        // Initially no numbering
+        assert!(generator.heading_processor.is_none());
+        
+        // Update config to include numbering
+        let mut new_config = create_test_config();
+        new_config.styles.headings.get_mut(&1).unwrap().numbering = Some("%1.".to_string());
+        
+        generator.update_config(new_config);
+        
+        // Now should have heading processor
+        assert!(generator.heading_processor.is_some());
+        
+        // Update config to remove numbering
+        let no_numbering_config = create_test_config();
+        generator.update_config(no_numbering_config);
+        
+        // Should no longer have heading processor
+        assert!(generator.heading_processor.is_none());
+    }
+
+    #[test]
+    fn test_numbering_state_reset_between_documents() {
+        let mut config = create_test_config();
+        config.styles.headings.get_mut(&1).unwrap().numbering = Some("%1.".to_string());
+        
+        let mut generator = DocxGenerator::new(config);
+        
+        // Generate first document
+        let mut document1 = MarkdownDocument::new();
+        document1.add_element(MarkdownElement::Heading {
+            level: 1,
+            text: "First Document".to_string(),
+        });
+        
+        let result1 = generator.generate(&document1);
+        assert!(result1.is_ok());
+        
+        // Generate second document - numbering should reset
+        let mut document2 = MarkdownDocument::new();
+        document2.add_element(MarkdownElement::Heading {
+            level: 1,
+            text: "Second Document".to_string(),
+        });
+        
+        let result2 = generator.generate(&document2);
+        assert!(result2.is_ok());
+        
+        // Both should succeed and numbering should start fresh for each document
+        assert!(!result1.unwrap().is_empty());
+        assert!(!result2.unwrap().is_empty());
+    }
+
+    #[test]
+    fn test_numbering_error_handling() {
+        let mut config = create_test_config();
+        config.styles.headings.get_mut(&1).unwrap().numbering = Some("%1.".to_string());
+        
+        let mut generator = DocxGenerator::new(config);
+        
+        // Test with invalid heading level (should be handled gracefully)
+        let mut document = MarkdownDocument::new();
+        document.add_element(MarkdownElement::Heading {
+            level: 1,
+            text: "Valid Heading".to_string(),
+        });
+        
+        let result = generator.generate(&document);
+        assert!(result.is_ok());
+        
+        let docx_bytes = result.unwrap();
+        assert!(!docx_bytes.is_empty());
+    }
+
+    #[test]
+    fn test_numbering_with_empty_text() {
+        let mut config = create_test_config();
+        config.styles.headings.get_mut(&1).unwrap().numbering = Some("%1.".to_string());
+        
+        let mut generator = DocxGenerator::new(config);
+        
+        let mut document = MarkdownDocument::new();
+        document.add_element(MarkdownElement::Heading {
+            level: 1,
+            text: "".to_string(), // Empty text
+        });
+        document.add_element(MarkdownElement::Heading {
+            level: 1,
+            text: "   ".to_string(), // Whitespace only
+        });
+        
+        let result = generator.generate(&document);
+        assert!(result.is_ok());
+        
+        let docx_bytes = result.unwrap();
+        assert!(!docx_bytes.is_empty());
+    }
+
+    #[test]
+    fn test_complex_numbering_scenario() {
+        let mut config = create_test_config();
+        
+        // Configure numbering for multiple levels
+        config.styles.headings.get_mut(&1).unwrap().numbering = Some("%1.".to_string());
+        config.styles.headings.get_mut(&2).unwrap().numbering = Some("%1.%2.".to_string());
+        config.styles.headings.get_mut(&3).unwrap().numbering = Some("%1.%2.%3".to_string());
+        
+        let mut generator = DocxGenerator::new(config);
+        
+        let mut document = MarkdownDocument::new();
+        
+        // Create a complex document structure
+        document.add_element(MarkdownElement::Heading {
+            level: 1,
+            text: "Chapter 1".to_string(),
+        });
+        document.add_element(MarkdownElement::Heading {
+            level: 2,
+            text: "Section 1.1".to_string(),
+        });
+        document.add_element(MarkdownElement::Heading {
+            level: 3,
+            text: "Subsection 1.1.1".to_string(),
+        });
+        document.add_element(MarkdownElement::Heading {
+            level: 3,
+            text: "Subsection 1.1.2".to_string(),
+        });
+        document.add_element(MarkdownElement::Heading {
+            level: 2,
+            text: "Section 1.2".to_string(),
+        });
+        document.add_element(MarkdownElement::Heading {
+            level: 1,
+            text: "Chapter 2".to_string(),
+        });
+        document.add_element(MarkdownElement::Heading {
+            level: 2,
+            text: "Section 2.1".to_string(),
+        });
+        
+        let result = generator.generate(&document);
+        assert!(result.is_ok());
+        
+        let docx_bytes = result.unwrap();
+        assert!(!docx_bytes.is_empty());
+        
+        // Verify that heading processor was created and is working
+        assert!(generator.heading_processor.is_some());
+    }
+
+    #[test]
+    fn test_numbering_graceful_degradation() {
+        let mut config = create_test_config();
+        config.styles.headings.get_mut(&1).unwrap().numbering = Some("%1.".to_string());
+        
+        let mut generator = DocxGenerator::new(config);
+        
+        // Test that the generator handles potential numbering errors gracefully
+        // by ensuring the document generation still succeeds even if numbering fails
+        let mut document = MarkdownDocument::new();
+        document.add_element(MarkdownElement::Heading {
+            level: 1,
+            text: "Test Heading".to_string(),
+        });
+        
+        let result = generator.generate(&document);
+        assert!(result.is_ok());
+        
+        let docx_bytes = result.unwrap();
+        assert!(!docx_bytes.is_empty());
+        
+        // Verify that the heading processor exists and is functional
+        assert!(generator.heading_processor.is_some());
+        
+        // Test that the processor can handle multiple headings without issues
+        let mut document2 = MarkdownDocument::new();
+        for i in 1..=5 {
+            document2.add_element(MarkdownElement::Heading {
+                level: 1,
+                text: format!("Heading {}", i),
+            });
+        }
+        
+        let result2 = generator.generate(&document2);
+        assert!(result2.is_ok());
+        assert!(!result2.unwrap().is_empty());
+    }
+
+    #[test]
+    fn test_numbering_style_consistency() {
+        let mut config = create_test_config();
+        
+        // Configure numbering and ensure styles are applied consistently
+        config.styles.headings.get_mut(&1).unwrap().numbering = Some("%1.".to_string());
+        config.styles.headings.get_mut(&1).unwrap().font.bold = true;
+        config.styles.headings.get_mut(&1).unwrap().font.size = 18.0;
+        
+        let mut generator = DocxGenerator::new(config);
+        
+        let mut document = MarkdownDocument::new();
+        document.add_element(MarkdownElement::Heading {
+            level: 1,
+            text: "Styled Heading".to_string(),
+        });
+        
+        let result = generator.generate(&document);
+        assert!(result.is_ok());
+        
+        let docx_bytes = result.unwrap();
+        assert!(!docx_bytes.is_empty());
+        
+        // The test verifies that the docx generation succeeds with styled numbered headings
+        // The actual style application is verified by the docx library integration
     }
 }

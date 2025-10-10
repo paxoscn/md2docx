@@ -47,6 +47,21 @@ pub struct ConfigUpdateResponse {
     pub error: Option<String>,
 }
 
+/// Configuration validation request
+#[derive(Deserialize)]
+pub struct ConfigValidationRequest {
+    pub config: String,
+}
+
+/// Configuration validation response
+#[derive(Serialize)]
+pub struct ConfigValidationResponse {
+    pub success: bool,
+    pub valid: bool,
+    pub parsed_config: Option<serde_json::Value>,
+    pub error: Option<String>,
+}
+
 /// File upload response
 #[derive(Serialize)]
 pub struct FileUploadResponse {
@@ -93,7 +108,6 @@ pub async fn convert_markdown(
     State(app_state): State<AppState>,
     JsonExtractor(request): JsonExtractor<ConvertRequest>,
 ) -> Result<Json<ConvertResponse>, StatusCode> {
-    let engine = &app_state.conversion_engine;
     tracing::info!("Received conversion request");
     
     // Handle natural language config update if provided
@@ -129,6 +143,7 @@ pub async fn convert_markdown(
     }
     
     // Perform the conversion
+    let mut engine = app_state.conversion_engine.lock().await;
     match engine.convert(&request.markdown).await {
         Ok(docx_bytes) => {
             tracing::info!("Conversion successful, generated {} bytes", docx_bytes.len());
@@ -154,11 +169,13 @@ pub async fn update_config_natural(
     State(app_state): State<AppState>,
     JsonExtractor(request): JsonExtractor<ConfigUpdateRequest>,
 ) -> Result<Json<ConfigUpdateResponse>, StatusCode> {
-    let engine = &app_state.conversion_engine;
     tracing::info!("Received natural language config update request");
     
     // Get current configuration
-    let current_config = engine.config();
+    let current_config = {
+        let engine = app_state.conversion_engine.lock().await;
+        engine.config().clone()
+    };
     
     // Create LLM client for configuration updates
     // For now, we'll use environment variables for API configuration
@@ -246,11 +263,13 @@ pub async fn preview_config_update(
     State(app_state): State<AppState>,
     JsonExtractor(request): JsonExtractor<ConfigUpdateRequest>,
 ) -> Result<Json<ConfigUpdateResponse>, StatusCode> {
-    let engine = &app_state.conversion_engine;
     tracing::info!("Received config preview request");
     
     // Get current configuration
-    let current_config = engine.config();
+    let current_config = {
+        let engine = app_state.conversion_engine.lock().await;
+        engine.config().clone()
+    };
     
     // Create LLM client for configuration updates
     let llm_config = match create_llm_config_from_env() {
@@ -490,7 +509,6 @@ pub async fn upload_and_convert(
     State(app_state): State<AppState>,
     mut multipart: Multipart,
 ) -> Result<Response, StatusCode> {
-    let engine = &app_state.conversion_engine;
     tracing::info!("Received file upload request");
     
     let mut markdown_content = String::new();
@@ -551,6 +569,7 @@ pub async fn upload_and_convert(
     }
     
     // Perform conversion
+    let mut engine = app_state.conversion_engine.lock().await;
     match engine.convert(&markdown_content).await {
         Ok(docx_bytes) => {
             tracing::info!("File conversion successful, generated {} bytes", docx_bytes.len());
@@ -578,10 +597,10 @@ pub async fn download_converted(
     State(app_state): State<AppState>,
     JsonExtractor(request): JsonExtractor<ConvertRequest>,
 ) -> Result<Response, StatusCode> {
-    let engine = &app_state.conversion_engine;
     tracing::info!("Received download request for converted file");
     
     // Perform conversion
+    let mut engine = app_state.conversion_engine.lock().await;
     match engine.convert(&request.markdown).await {
         Ok(docx_bytes) => {
             tracing::info!("Conversion for download successful, generated {} bytes", docx_bytes.len());
@@ -600,6 +619,63 @@ pub async fn download_converted(
         Err(e) => {
             tracing::error!("Conversion for download failed: {}", e);
             Err(StatusCode::INTERNAL_SERVER_ERROR)
+        }
+    }
+}
+
+/// Validate configuration handler
+pub async fn validate_config(
+    JsonExtractor(request): JsonExtractor<ConfigValidationRequest>,
+) -> Result<Json<ConfigValidationResponse>, StatusCode> {
+    tracing::info!("Received configuration validation request");
+    
+    // Try to parse the YAML configuration
+    match serde_yaml::from_str::<crate::config::ConversionConfig>(&request.config) {
+        Ok(config) => {
+            // Validate the parsed configuration
+            match config.validate() {
+                Ok(()) => {
+                    // Convert to JSON for frontend consumption
+                    match serde_json::to_value(&config) {
+                        Ok(json_config) => {
+                            tracing::info!("Configuration validation successful");
+                            Ok(Json(ConfigValidationResponse {
+                                success: true,
+                                valid: true,
+                                parsed_config: Some(json_config),
+                                error: None,
+                            }))
+                        }
+                        Err(e) => {
+                            tracing::error!("Failed to serialize config to JSON: {}", e);
+                            Ok(Json(ConfigValidationResponse {
+                                success: false,
+                                valid: false,
+                                parsed_config: None,
+                                error: Some(format!("Serialization error: {}", e)),
+                            }))
+                        }
+                    }
+                }
+                Err(validation_error) => {
+                    tracing::warn!("Configuration validation failed: {}", validation_error);
+                    Ok(Json(ConfigValidationResponse {
+                        success: true,
+                        valid: false,
+                        parsed_config: None,
+                        error: Some(validation_error.to_string()),
+                    }))
+                }
+            }
+        }
+        Err(parse_error) => {
+            tracing::warn!("Configuration parsing failed: {}", parse_error);
+            Ok(Json(ConfigValidationResponse {
+                success: true,
+                valid: false,
+                parsed_config: None,
+                error: Some(format!("YAML parsing error: {}", parse_error)),
+            }))
         }
     }
 }

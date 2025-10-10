@@ -42,16 +42,19 @@ styles:
         name: "Times New Roman"
         size: 18
       bold: true
+      numbering: "%1."
     2:
       font:
         name: "Times New Roman"
         size: 16
       bold: true
+      numbering: "%1.%2."
     3:
       font:
         name: "Times New Roman"
         size: 14
       bold: true
+      numbering: "%1.%2.%3"
   paragraph:
     font:
       name: "Times New Roman"

@@ -222,7 +222,7 @@ async fn handle_convert(
     }
     
     // Create conversion engine
-    let engine = ConversionEngine::new(config);
+    let mut engine = ConversionEngine::new(config);
     
     // Show conversion statistics if requested
     if show_stats {
@@ -306,7 +306,7 @@ async fn handle_batch(
     }
     
     // Create conversion engine
-    let engine = ConversionEngine::new(config);
+    let mut engine = ConversionEngine::new(config);
     
     // Prepare file pairs for batch conversion
     let file_pairs: Vec<(String, String)> = markdown_files

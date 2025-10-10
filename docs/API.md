@@ -278,6 +278,7 @@ styles:
       spacing_before: number
       spacing_after: number
       alignment: string  # left, center, right, justify
+      numbering: string  # Optional: numbering format (e.g., "%1.", "%1.%2.")
   
   paragraph:
     font:
@@ -356,6 +357,13 @@ The natural language processor can understand various types of formatting comman
 - "Make tables have borders"
 - "Remove underlines from links"
 - "Use monospace font for code"
+
+#### Numbering Changes
+- "Add numbering to H1 headings with format 1."
+- "Add numbering to H2 headings with format 1.1."
+- "Remove numbering from H3 headings"
+- "为一级标题添加编号，格式为1." (Chinese)
+- "取消二级标题的编号" (Chinese)
 
 ### Best Practices
 

@@ -1,4 +1,4 @@
-import type { ConvertRequest, ConvertResponse, ConfigUpdateRequest, ConfigUpdateResponse } from '../types';
+import type { ConvertRequest, ConvertResponse, ConfigUpdateRequest, ConfigUpdateResponse, ConfigValidationRequest, ConfigValidationResponse } from '../types';
 
 const API_BASE_URL = 'http://localhost:3000/api';
 
@@ -53,6 +53,36 @@ export class ApiService {
     } catch (error) {
       return {
         success: false,
+        error: error instanceof Error ? error.message : 'Network error',
+      };
+    }
+  }
+
+  static async validateConfig(request: ConfigValidationRequest): Promise<ConfigValidationResponse> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/config/validate`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(request),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        return {
+          success: false,
+          valid: false,
+          error: data.error || 'Config validation failed',
+        };
+      }
+
+      return data;
+    } catch (error) {
+      return {
+        success: false,
+        valid: false,
         error: error instanceof Error ? error.message : 'Network error',
       };
     }

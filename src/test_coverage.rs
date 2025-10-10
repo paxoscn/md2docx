@@ -20,7 +20,7 @@ mod coverage_tests {
         assert!(!doc.elements.is_empty());
         
         // Test docx generation
-        let generator = crate::DocxGenerator::new(config.clone());
+        let mut generator = crate::DocxGenerator::new(config.clone());
         let docx_bytes = generator.generate(&doc).unwrap();
         assert!(!docx_bytes.is_empty());
         
@@ -99,7 +99,7 @@ mod coverage_tests {
     #[tokio::test]
     async fn test_full_pipeline_integration() {
         let config = create_test_config();
-        let engine = crate::ConversionEngine::new(config);
+        let mut engine = crate::ConversionEngine::new(config);
         let markdown = create_test_markdown();
         
         // Test the full conversion pipeline
@@ -203,7 +203,7 @@ mod benchmark_tests {
     #[tokio::test]
     async fn benchmark_docx_generation() {
         let config = create_test_config();
-        let generator = crate::DocxGenerator::new(config);
+        let mut generator = crate::DocxGenerator::new(config);
         let document = create_test_document();
         
         let iterations = 10;
@@ -224,7 +224,7 @@ mod benchmark_tests {
     #[tokio::test]
     async fn benchmark_full_conversion() {
         let config = create_test_config();
-        let engine = crate::ConversionEngine::new(config);
+        let mut engine = crate::ConversionEngine::new(config);
         let markdown = create_test_markdown();
         
         let iterations = 10;

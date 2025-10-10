@@ -44,12 +44,12 @@ pub struct TaskResult {
 pub struct TaskQueue {
     sender: mpsc::UnboundedSender<ConversionTask>,
     results: Arc<RwLock<HashMap<String, TaskResult>>>,
-    conversion_engine: Arc<ConversionEngine>,
+    conversion_engine: Arc<tokio::sync::Mutex<ConversionEngine>>,
 }
 
 impl TaskQueue {
     /// Create a new task queue with the specified number of workers
-    pub fn new(conversion_engine: Arc<ConversionEngine>, worker_count: usize) -> Self {
+    pub fn new(conversion_engine: Arc<tokio::sync::Mutex<ConversionEngine>>, worker_count: usize) -> Self {
         let (sender, mut receiver) = mpsc::unbounded_channel();
         let results = Arc::new(RwLock::new(HashMap::new()));
         
@@ -166,7 +166,7 @@ impl TaskQueue {
         worker_id: usize,
         mut receiver: mpsc::UnboundedReceiver<ConversionTask>,
         results: Arc<RwLock<HashMap<String, TaskResult>>>,
-        engine: Arc<ConversionEngine>,
+        engine: Arc<tokio::sync::Mutex<ConversionEngine>>,
     ) {
         info!("Worker {} started", worker_id);
         
@@ -182,7 +182,8 @@ impl TaskQueue {
             }
             
             // Process the task
-            let task_result = Self::process_task(&task, &engine).await;
+            let mut engine_guard = engine.lock().await;
+            let task_result = Self::process_task(&task, &mut *engine_guard).await;
             
             // Update task result
             {
@@ -197,7 +198,7 @@ impl TaskQueue {
     }
 
     /// Process a single conversion task
-    async fn process_task(task: &ConversionTask, engine: &ConversionEngine) -> TaskResult {
+    async fn process_task(task: &ConversionTask, engine: &mut ConversionEngine) -> TaskResult {
         let start_time = std::time::Instant::now();
         
         match engine.convert(&task.markdown_content).await {
@@ -264,7 +265,7 @@ pub struct TaskQueueManager {
 impl TaskQueueManager {
     /// Create a new task queue manager
     pub fn new(
-        conversion_engine: Arc<ConversionEngine>,
+        conversion_engine: Arc<tokio::sync::Mutex<ConversionEngine>>,
         worker_count: usize,
         cleanup_interval: std::time::Duration,
         max_task_age: std::time::Duration,
@@ -343,9 +344,9 @@ mod tests {
     use super::*;
     use crate::config::ConversionConfig;
 
-    fn create_test_engine() -> Arc<ConversionEngine> {
+    fn create_test_engine() -> Arc<tokio::sync::Mutex<ConversionEngine>> {
         let config = ConversionConfig::default();
-        Arc::new(ConversionEngine::new(config))
+        Arc::new(tokio::sync::Mutex::new(ConversionEngine::new(config)))
     }
 
     #[tokio::test]

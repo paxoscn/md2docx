@@ -20,7 +20,7 @@ use tower::ServiceExt;
 /// Helper function to create test app
 async fn create_test_app() -> Router {
     let config = ConversionConfig::default();
-    let engine = Arc::new(ConversionEngine::new(config));
+    let engine = Arc::new(std::sync::Mutex::new(ConversionEngine::new(config)));
     let app_state = AppState {
         conversion_engine: engine,
         task_queue: None,
@@ -530,4 +530,145 @@ async fn test_api_cors_headers() {
         response.status() == StatusCode::NO_CONTENT ||
         response.status() == StatusCode::METHOD_NOT_ALLOWED
     );
+}
+
+#[tokio::test]
+async fn test_numbering_configuration_integration() {
+    // Test the numbering functionality with a complete configuration
+    let mut config = ConversionConfig::default();
+    
+    // Add numbering to different heading levels
+    config.styles.headings.get_mut(&1).unwrap().numbering = Some("%1.".to_string());
+    config.styles.headings.get_mut(&2).unwrap().numbering = Some("%1.%2.".to_string());
+    config.styles.headings.get_mut(&3).unwrap().numbering = Some("%1.%2.%3".to_string());
+    
+    // Validate the configuration with numbering
+    assert!(config.validate().is_ok());
+    
+    let engine = ConversionEngine::new(config);
+    
+    // Test markdown with multiple heading levels
+    let markdown_with_headings = r#"# First Chapter
+
+This is the introduction.
+
+## First Section
+
+Content of the first section.
+
+### Subsection A
+
+Details in subsection A.
+
+### Subsection B
+
+Details in subsection B.
+
+## Second Section
+
+Content of the second section.
+
+# Second Chapter
+
+This is the second chapter.
+
+## Another Section
+
+More content here.
+"#;
+    
+    // Convert and verify it doesn't crash
+    let result = engine.convert(markdown_with_headings).await;
+    assert!(result.is_ok());
+    
+    let docx_bytes = result.unwrap();
+    assert!(!docx_bytes.is_empty());
+    assert!(docx_bytes.len() > 1000);
+    
+    // Verify docx file structure
+    assert_eq!(&docx_bytes[0..2], b"PK"); // ZIP signature
+}
+
+#[tokio::test]
+async fn test_numbering_natural_language_parsing() {
+    // Test the natural language parsing functionality for numbering
+    use md2docx_converter::llm::prompts::{parse_numbering_request, NumberingAction};
+    
+    // Test Chinese requests
+    let request = parse_numbering_request("为一级标题添加编号，格式为1.").unwrap();
+    assert_eq!(request.level, 1);
+    assert_eq!(request.action, NumberingAction::Add("%1.".to_string()));
+    
+    let request = parse_numbering_request("为二级标题添加编号，格式为1.1.").unwrap();
+    assert_eq!(request.level, 2);
+    assert_eq!(request.action, NumberingAction::Add("%1.%2.".to_string()));
+    
+    let request = parse_numbering_request("取消三级标题的编号").unwrap();
+    assert_eq!(request.level, 3);
+    assert_eq!(request.action, NumberingAction::Remove);
+    
+    // Test English requests
+    let request = parse_numbering_request("Add numbering to H1 headings with format 1.").unwrap();
+    assert_eq!(request.level, 1);
+    assert_eq!(request.action, NumberingAction::Add("%1.".to_string()));
+    
+    let request = parse_numbering_request("Remove numbering from H2 headings").unwrap();
+    assert_eq!(request.level, 2);
+    assert_eq!(request.action, NumberingAction::Remove);
+    
+    // Test invalid requests
+    assert!(parse_numbering_request("这不是编号相关的请求").is_none());
+    assert!(parse_numbering_request("change font size").is_none());
+}
+
+#[tokio::test]
+async fn test_numbering_config_validation() {
+    // Test configuration validation with various numbering formats
+    let mut config = ConversionConfig::default();
+    
+    // Test valid numbering formats
+    let valid_formats = vec!["%1.", "%1.%2.", "%1.%2.%3", "%1-%2-%3", "Chapter %1"];
+    for format in valid_formats {
+        config.styles.headings.get_mut(&1).unwrap().numbering = Some(format.to_string());
+        assert!(config.validate().is_ok(), "Format '{}' should be valid", format);
+    }
+    
+    // Test invalid numbering formats
+    let invalid_formats = vec!["", "no placeholders", "%1.%3.", "%2.%3.", "%0.", "%7."];
+    for format in invalid_formats {
+        config.styles.headings.get_mut(&1).unwrap().numbering = Some(format.to_string());
+        let result = config.validate();
+        assert!(result.is_err(), "Format '{}' should be invalid", format);
+    }
+    
+    // Test None numbering (should be valid)
+    config.styles.headings.get_mut(&1).unwrap().numbering = None;
+    assert!(config.validate().is_ok());
+}
+
+#[tokio::test]
+async fn test_numbering_serialization() {
+    // Test that numbering configuration serializes and deserializes correctly
+    let mut config = ConversionConfig::default();
+    config.styles.headings.get_mut(&1).unwrap().numbering = Some("%1.".to_string());
+    config.styles.headings.get_mut(&2).unwrap().numbering = Some("%1.%2.".to_string());
+    
+    // Test YAML serialization
+    let yaml = serde_yaml::to_string(&config).unwrap();
+    assert!(yaml.contains("numbering"));
+    assert!(yaml.contains("%1."));
+    assert!(yaml.contains("%1.%2."));
+    
+    // Test deserialization
+    let deserialized: ConversionConfig = serde_yaml::from_str(&yaml).unwrap();
+    assert!(deserialized.validate().is_ok());
+    assert_eq!(deserialized.styles.headings.get(&1).unwrap().numbering, Some("%1.".to_string()));
+    assert_eq!(deserialized.styles.headings.get(&2).unwrap().numbering, Some("%1.%2.".to_string()));
+    assert_eq!(deserialized.styles.headings.get(&3).unwrap().numbering, None);
+    
+    // Test JSON serialization
+    let json = serde_json::to_string(&config).unwrap();
+    let deserialized: ConversionConfig = serde_json::from_str(&json).unwrap();
+    assert!(deserialized.validate().is_ok());
+    assert_eq!(deserialized.styles.headings.get(&1).unwrap().numbering, Some("%1.".to_string()));
 }

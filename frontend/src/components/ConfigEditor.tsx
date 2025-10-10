@@ -14,32 +14,28 @@ export default function ConfigEditor() {
   const [parsedConfig, setParsedConfig] = useState<ConversionConfig | null>(null);
   const [isValidating, setIsValidating] = useState(false);
 
-  // Debounced validation function
+  // Debounced validation function using backend API
   const validateConfig = useCallback(
-    debounce((configText: string) => {
+    debounce(async (configText: string) => {
       setIsValidating(true);
       try {
-        const parsed = yaml.load(configText) as ConversionConfig;
+        // First try basic YAML parsing
+        const basicParsed = yaml.load(configText) as ConversionConfig;
         
-        // Basic validation
-        if (!parsed || typeof parsed !== 'object') {
+        if (!basicParsed || typeof basicParsed !== 'object') {
           throw new Error('Configuration must be a valid object');
         }
-        
-        if (!parsed.document) {
-          throw new Error('Missing required "document" section');
-        }
-        
-        if (!parsed.styles) {
-          throw new Error('Missing required "styles" section');
-        }
-        
-        if (!parsed.elements) {
-          throw new Error('Missing required "elements" section');
-        }
 
-        setParsedConfig(parsed);
-        setValidationError(null);
+        // Use backend validation for comprehensive checking including numbering
+        const response = await ApiService.validateConfig({ config: configText });
+        
+        if (response.success && response.valid && response.parsed_config) {
+          setParsedConfig(response.parsed_config);
+          setValidationError(null);
+        } else {
+          setParsedConfig(null);
+          setValidationError(response.error || 'Configuration validation failed');
+        }
       } catch (error) {
         setParsedConfig(null);
         setValidationError(error instanceof Error ? error.message : 'Invalid YAML format');

@@ -18,6 +18,47 @@ describe('ConfigEditor', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     
+    // Mock the validation API
+    mockApiService.validateConfig.mockResolvedValue({
+      success: true,
+      valid: true,
+      parsed_config: {
+        document: {
+          page_size: { width: 595, height: 842 },
+          margins: { top: 72, bottom: 72, left: 72, right: 72 },
+          default_font: { name: 'Times New Roman', size: 12 },
+        },
+        styles: {
+          headings: {
+            1: {
+              font: { name: 'Times New Roman', size: 18 },
+              bold: true,
+            },
+          },
+          paragraph: {
+            font: { name: 'Times New Roman', size: 12 },
+            line_spacing: 1.15,
+            indent: 0,
+          },
+          code_block: {
+            font: { name: 'Courier New', size: 10 },
+            background_color: '#f5f5f5',
+            border: true,
+          },
+          table: {
+            border: true,
+            header_background: '#f0f0f0',
+            font: { name: 'Times New Roman', size: 11 },
+          },
+        },
+        elements: {
+          image: { max_width: 500, alignment: 'center' },
+          list: { indent: 20, spacing: 6 },
+          link: { color: '#0066cc', underline: true },
+        },
+      },
+    });
+    
     const validConfig = `document:
   page_size:
     width: 595
@@ -98,6 +139,13 @@ elements:
   });
 
   it('shows error for invalid YAML', async () => {
+    // Mock validation failure
+    mockApiService.validateConfig.mockResolvedValue({
+      success: true,
+      valid: false,
+      error: 'Invalid YAML syntax',
+    });
+
     mockUseAppStore.mockReturnValue({
       config: 'invalid: yaml: [',
       setConfig: mockSetConfig,

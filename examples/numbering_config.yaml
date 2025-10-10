@@ -1,0 +1,136 @@
+# Example configuration with heading auto-numbering
+# This configuration demonstrates various numbering formats and patterns
+
+document:
+  page_size:
+    width: 595.0    # A4 width in points
+    height: 842.0   # A4 height in points
+  margins:
+    top: 72.0       # 1 inch margins
+    bottom: 72.0
+    left: 72.0
+    right: 72.0
+  default_font:
+    family: "Times New Roman"
+    size: 12.0
+    bold: false
+    italic: false
+
+styles:
+  headings:
+    1:  # H1 - Chapter level
+      font:
+        family: "Times New Roman"
+        size: 18.0
+        bold: true
+        color: "#2E4057"
+      spacing_before: 18.0
+      spacing_after: 12.0
+      alignment: "left"
+      numbering: "%1."  # Produces: 1., 2., 3., etc.
+    
+    2:  # H2 - Section level
+      font:
+        family: "Times New Roman"
+        size: 16.0
+        bold: true
+        color: "#2E4057"
+      spacing_before: 14.0
+      spacing_after: 8.0
+      alignment: "left"
+      numbering: "%1.%2."  # Produces: 1.1., 1.2., 2.1., etc.
+    
+    3:  # H3 - Subsection level
+      font:
+        family: "Times New Roman"
+        size: 14.0
+        bold: true
+        color: "#333333"
+      spacing_before: 12.0
+      spacing_after: 6.0
+      alignment: "left"
+      numbering: "%1.%2.%3"  # Produces: 1.1.1, 1.1.2, 1.2.1, etc.
+    
+    4:  # H4 - No numbering (demonstrates mixed scenario)
+      font:
+        family: "Times New Roman"
+        size: 13.0
+        bold: true
+        color: "#333333"
+      spacing_before: 10.0
+      spacing_after: 5.0
+      alignment: "left"
+      # No numbering field - H4 headings will not be numbered
+    
+    5:  # H5 - No numbering
+      font:
+        family: "Times New Roman"
+        size: 12.0
+        bold: true
+        color: "#333333"
+      spacing_before: 8.0
+      spacing_after: 4.0
+      alignment: "left"
+      # No numbering field
+    
+    6:  # H6 - No numbering
+      font:
+        family: "Times New Roman"
+        size: 12.0
+        bold: false
+        italic: true
+        color: "#333333"
+      spacing_before: 6.0
+      spacing_after: 3.0
+      alignment: "left"
+      # No numbering field
+
+  paragraph:
+    font:
+      family: "Times New Roman"
+      size: 12.0
+      bold: false
+      italic: false
+      color: "#000000"
+    line_spacing: 1.15
+    spacing_after: 6.0
+    alignment: "justify"
+
+  code_block:
+    font:
+      family: "Courier New"
+      size: 10.0
+      bold: false
+      italic: false
+      color: "#000000"
+    background_color: "#f5f5f5"
+    border: true
+    padding: 8.0
+
+  table:
+    header_font:
+      family: "Times New Roman"
+      size: 12.0
+      bold: true
+      color: "#000000"
+    cell_font:
+      family: "Times New Roman"
+      size: 12.0
+      bold: false
+      color: "#000000"
+    border_width: 1.0
+    header_background: "#f0f0f0"
+
+elements:
+  image:
+    max_width: 500.0
+    max_height: 400.0
+    alignment: "center"
+  
+  list:
+    indent: 36.0
+    spacing: 6.0
+  
+  link:
+    color: "#0066cc"
+    underline: true

@@ -14,6 +14,7 @@ pub mod markdown;
 pub mod docx;
 pub mod web;
 pub mod logging;
+pub mod numbering;
 
 #[cfg(test)]
 pub mod test_utils;
@@ -28,6 +29,7 @@ pub use error::{ConversionError, ConfigError, WebError, CliError};
 pub use markdown::MarkdownParser;
 pub use docx::DocxGenerator;
 pub use logging::{LoggingConfig, init_logging};
+pub use numbering::{NumberingState, NumberingError};
 
 /// Result type alias for the library
 pub type Result<T> = std::result::Result<T, ConversionError>;

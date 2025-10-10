@@ -5,6 +5,7 @@ A powerful, configurable Markdown to Microsoft Word docx converter with web API,
 ## Features
 
 - **🔧 Configurable Conversion**: YAML-based configuration for complete control over formatting rules
+- **🔢 Auto-Numbering**: Automatic heading numbering with configurable formats (1., 1.1., 1.1.1, etc.)
 - **🤖 Natural Language Config**: Update configurations using natural language descriptions via LLM integration
 - **🌐 Multiple Interfaces**: Web API, CLI tool, and intuitive web interface
 - **📦 Batch Processing**: Convert multiple files efficiently
@@ -56,6 +57,9 @@ md2docx-cli convert -i input.md -o output.docx -c config.yaml
 
 # With natural language configuration
 md2docx-cli convert -i input.md -o output.docx --config-prompt "Make all headings blue and use Arial font"
+
+# With heading numbering
+md2docx-cli convert -i input.md -o output.docx --config-prompt "Add numbering to H1 headings with format 1. and H2 headings with format 1.1."
 ```
 
 #### Batch Conversion
@@ -191,6 +195,15 @@ styles:
         bold: true
       spacing_before: 12.0
       spacing_after: 6.0
+      numbering: "%1."  # Optional: adds "1.", "2.", etc.
+    2:  # H2 style
+      font:
+        family: "Times New Roman"
+        size: 16.0
+        bold: true
+      spacing_before: 12.0
+      spacing_after: 6.0
+      numbering: "%1.%2."  # Optional: adds "1.1.", "1.2.", etc.
     # ... up to H6
   
   paragraph:
@@ -245,6 +258,9 @@ You can modify configurations using natural language descriptions:
 - "Set margins to 1.5 inches on all sides"
 - "Make code blocks have a gray background"
 - "Center all images and make them smaller"
+- "Add numbering to H1 headings with format 1."
+- "Add numbering to H2 headings with format 1.1."
+- "Remove numbering from H3 headings"
 
 #### Supported Modifications
 - **Fonts**: Change font family, size, color, bold, italic
