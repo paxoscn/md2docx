@@ -261,6 +261,12 @@ impl DocxGenerator {
 
         // Apply paragraph spacing - for now, we'll skip this as docx-rs API is different
         // TODO: Implement proper spacing when docx-rs API is clarified
+        // Add spacing before code block using empty paragraph
+        // Since docx-rs doesn't support paragraph spacing directly, we use empty paragraphs
+        let spacing_before = Paragraph::new()
+        .add_run(Run::new().add_text("\u{00A0}")) // Non-breaking space for minimal visibility
+        .size(6); // Small font size for minimal visual impact
+        docx = docx.add_paragraph(spacing_before);
 
         docx = docx.add_paragraph(paragraph);
         Ok(docx)
@@ -501,13 +507,15 @@ impl DocxGenerator {
     ) -> Result<Docx, ConversionError> {
         let table_style = &self.config.styles.table;
 
+        // Calculate column widths based on content
+        let column_widths = self.calculate_column_widths(headers, rows);
         let mut table_rows = vec![];
 
         // Add header row
         if !headers.is_empty() {
             let mut header_cells = vec![];
 
-            for header in headers {
+            for (index, header) in headers.iter().enumerate() {
                 let mut header_run = Run::new()
                     .add_text(header)
                     .fonts(
@@ -525,8 +533,13 @@ impl DocxGenerator {
                 }
 
                 let cell_paragraph = Paragraph::new().add_run(header_run);
-                let cell = TableCell::new().add_paragraph(cell_paragraph);
-                // TODO: Add cell borders when docx-rs API supports it properly
+                let mut cell = TableCell::new().add_paragraph(cell_paragraph);
+                
+                // Set cell width based on content
+                if let Some(&width) = column_widths.get(index) {
+                    cell = cell.width(width, WidthType::Dxa);
+                }
+                
                 header_cells.push(cell);
             }
 
@@ -537,7 +550,7 @@ impl DocxGenerator {
         for row in rows {
             let mut row_cells = vec![];
 
-            for cell_data in row {
+            for (index, cell_data) in row.iter().enumerate() {
                 let mut cell_run = Run::new()
                     .add_text(cell_data)
                     .fonts(
@@ -555,16 +568,28 @@ impl DocxGenerator {
                 }
 
                 let cell_paragraph = Paragraph::new().add_run(cell_run);
-                let cell = TableCell::new().add_paragraph(cell_paragraph);
-                // TODO: Add cell borders when docx-rs API supports it properly
+                let mut cell = TableCell::new().add_paragraph(cell_paragraph);
+                
+                // Set cell width based on content
+                if let Some(&width) = column_widths.get(index) {
+                    cell = cell.width(width, WidthType::Dxa);
+                }
+                
                 row_cells.push(cell);
             }
 
             table_rows.push(TableRow::new(row_cells));
         }
 
-        let table = Table::new(table_rows);
-        // TODO: Set table-wide borders when docx-rs API supports it properly
+        // Create table with auto-layout for better content fitting
+        let mut table = Table::new(table_rows)
+            .layout(TableLayoutType::Autofit);
+
+        // Apply table borders if configured
+        if table_style.border_width > 0.0 {
+            table = self.apply_table_borders(table, table_style.border_width)?;
+        }
+
         docx = docx.add_table(table);
         Ok(docx)
     }
@@ -834,6 +859,84 @@ impl DocxGenerator {
         paragraph = paragraph.line_spacing(LineSpacing::new().line(line_spacing_value));
 
         Ok(paragraph)
+    }
+
+    /// Calculate column widths based on content length
+    fn calculate_column_widths(&self, headers: &[String], rows: &[Vec<String>]) -> Vec<usize> {
+        if headers.is_empty() && rows.is_empty() {
+            return vec![];
+        }
+
+        // Determine number of columns
+        let num_columns = if !headers.is_empty() {
+            headers.len()
+        } else {
+            rows.iter().map(|row| row.len()).max().unwrap_or(0)
+        };
+
+        if num_columns == 0 {
+            return vec![];
+        }
+
+        let mut max_lengths = vec![0; num_columns];
+
+        // Check header lengths
+        for (i, header) in headers.iter().enumerate() {
+            if i < num_columns {
+                max_lengths[i] = max_lengths[i].max(self.estimate_text_width(header));
+            }
+        }
+
+        // Check data row lengths
+        for row in rows {
+            for (i, cell) in row.iter().enumerate() {
+                if i < num_columns {
+                    max_lengths[i] = max_lengths[i].max(self.estimate_text_width(cell));
+                }
+            }
+        }
+
+        // Convert character lengths to docx width units (DXA - twentieths of a point)
+        // Base calculation: approximately 120 DXA per character for typical fonts
+        // Add padding and ensure minimum/maximum widths
+        max_lengths
+            .into_iter()
+            .map(|len| {
+                let base_width = len * 120; // Base width calculation
+                let padded_width = base_width + 240; // Add padding (240 DXA = 12pt)
+                let min_width = 720; // Minimum width (720 DXA = 36pt)
+                let max_width = 2880; // Maximum width (2880 DXA = 144pt)
+                
+                padded_width.max(min_width).min(max_width)
+            })
+            .collect()
+    }
+
+    /// Estimate text width in characters (accounting for different character types)
+    fn estimate_text_width(&self, text: &str) -> usize {
+        let mut width = 0;
+        
+        for ch in text.chars() {
+            width += match ch {
+                // CJK characters (Chinese, Japanese, Korean) are typically wider
+                '\u{4E00}'..='\u{9FFF}' | // CJK Unified Ideographs
+                '\u{3400}'..='\u{4DBF}' | // CJK Extension A
+                '\u{3040}'..='\u{309F}' | // Hiragana
+                '\u{30A0}'..='\u{30FF}' | // Katakana
+                '\u{AC00}'..='\u{D7AF}' => 2, // Hangul
+                
+                // Wide ASCII characters
+                'W' | 'M' | 'Q' | 'G' | 'O' | 'D' | 'H' | 'B' | 'R' | 'U' => 2,
+                
+                // Narrow characters
+                'i' | 'l' | 'I' | 'j' | 'f' | 't' | 'r' => 1,
+                
+                // Regular characters
+                _ => if ch.is_ascii() { 1 } else { 2 }
+            };
+        }
+        
+        width
     }
 
     /// Get current configuration
@@ -2156,5 +2259,126 @@ mod tests {
         let cell_custom = generator_custom
             .create_code_block_cell(test_code, &generator_custom.config.styles.code_block);
         assert!(cell_custom.is_ok());
+    }
+
+    #[test]
+    fn test_calculate_column_widths() {
+        let config = create_test_config();
+        let generator = DocxGenerator::new(config);
+
+        // Test with headers and data
+        let headers = vec!["Name".to_string(), "Age".to_string(), "Very Long Description".to_string()];
+        let rows = vec![
+            vec!["Alice".to_string(), "30".to_string(), "Short".to_string()],
+            vec!["Bob".to_string(), "25".to_string(), "Medium length text".to_string()],
+            vec!["Charlie".to_string(), "35".to_string(), "This is a very long description that should determine the column width".to_string()],
+        ];
+
+        let widths = generator.calculate_column_widths(&headers, &rows);
+        assert_eq!(widths.len(), 3);
+        
+        // The third column should be wider due to the long content
+        assert!(widths[2] > widths[0]);
+        assert!(widths[2] > widths[1]);
+        
+        // All widths should be within reasonable bounds
+        for width in &widths {
+            assert!(*width >= 720); // Minimum width
+            assert!(*width <= 2880); // Maximum width
+        }
+    }
+
+    #[test]
+    fn test_estimate_text_width() {
+        let config = create_test_config();
+        let generator = DocxGenerator::new(config);
+
+        // Test ASCII text
+        let ascii_text = "Hello";
+        let ascii_width = generator.estimate_text_width(ascii_text);
+        assert_eq!(ascii_width, 6); // H(2) + e(1) + l(1) + l(1) + o(1) = 6
+
+        // Test wide characters
+        let wide_text = "WWW";
+        let wide_width = generator.estimate_text_width(wide_text);
+        assert_eq!(wide_width, 6); // 3 wide characters = 6 units
+
+        // Test narrow characters
+        let narrow_text = "iii";
+        let narrow_width = generator.estimate_text_width(narrow_text);
+        assert_eq!(narrow_width, 3); // 3 narrow characters = 3 units
+
+        // Test CJK characters
+        let cjk_text = "你好";
+        let cjk_width = generator.estimate_text_width(cjk_text);
+        assert_eq!(cjk_width, 4); // 2 CJK characters = 4 units
+
+        // Test mixed content
+        let mixed_text = "Hello你好";
+        let mixed_width = generator.estimate_text_width(mixed_text);
+        assert_eq!(mixed_width, 10); // H(2) + e(1) + l(1) + l(1) + o(1) + 你(2) + 好(2) = 10 units
+    }
+
+    #[test]
+    fn test_table_with_auto_width() {
+        let config = create_test_config();
+        let mut generator = DocxGenerator::new(config);
+
+        let mut document = MarkdownDocument::new();
+        document.add_element(MarkdownElement::Table {
+            headers: vec!["Short".to_string(), "Medium Length".to_string(), "Very Long Header Name".to_string()],
+            rows: vec![
+                vec!["A".to_string(), "Medium".to_string(), "This is a very long cell content that should make the column wider".to_string()],
+                vec!["B".to_string(), "Text".to_string(), "Short".to_string()],
+            ],
+        });
+
+        let result = generator.generate(&document);
+        assert!(result.is_ok());
+
+        let docx_bytes = result.unwrap();
+        assert!(!docx_bytes.is_empty());
+    }
+
+    #[test]
+    fn test_empty_table_handling() {
+        let config = create_test_config();
+        let generator = DocxGenerator::new(config);
+
+        // Test empty headers and rows
+        let widths = generator.calculate_column_widths(&[], &[]);
+        assert!(widths.is_empty());
+
+        // Test empty headers with data
+        let rows = vec![vec!["data".to_string()]];
+        let widths = generator.calculate_column_widths(&[], &rows);
+        assert_eq!(widths.len(), 1);
+
+        // Test headers with empty rows
+        let headers = vec!["Header".to_string()];
+        let widths = generator.calculate_column_widths(&headers, &[]);
+        assert_eq!(widths.len(), 1);
+    }
+
+    #[test]
+    fn test_table_with_borders_and_auto_width() {
+        let mut config = create_test_config();
+        config.styles.table.border_width = 1.5;
+        let mut generator = DocxGenerator::new(config);
+
+        let mut document = MarkdownDocument::new();
+        document.add_element(MarkdownElement::Table {
+            headers: vec!["Name".to_string(), "Description".to_string()],
+            rows: vec![
+                vec!["Item 1".to_string(), "Short description".to_string()],
+                vec!["Item 2".to_string(), "This is a much longer description that should affect the column width".to_string()],
+            ],
+        });
+
+        let result = generator.generate(&document);
+        assert!(result.is_ok());
+
+        let docx_bytes = result.unwrap();
+        assert!(!docx_bytes.is_empty());
     }
 }
