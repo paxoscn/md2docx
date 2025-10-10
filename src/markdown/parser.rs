@@ -188,17 +188,21 @@ impl MarkdownParser {
                 },
                 Event::Text(text) => {
                     let text_str = text.to_string();
-                    if !text_str.trim().is_empty() {
+                    // Normalize multiple consecutive spaces to single space
+                    let normalized_text = self.normalize_whitespace(&text_str);
+                    if !normalized_text.trim().is_empty() {
                         has_other_content = true;
                     }
-                    elements.push(InlineElement::Text(text_str));
+                    elements.push(InlineElement::Text(normalized_text));
                     *index += 1;
                 },
                 Event::SoftBreak => {
+                    // Soft breaks should be converted to single spaces
                     elements.push(InlineElement::Text(" ".to_string()));
                     *index += 1;
                 },
                 Event::HardBreak => {
+                    // Hard breaks should be preserved as line breaks
                     elements.push(InlineElement::Text("\n".to_string()));
                     *index += 1;
                     has_other_content = true;
@@ -222,7 +226,10 @@ impl MarkdownParser {
             }
         }
         
-        Ok((elements, None))
+        // Post-process: merge consecutive text elements and normalize whitespace
+        let processed_elements = self.merge_and_normalize_text_elements(elements);
+        
+        Ok((processed_elements, None))
     }
 
     /// Collect inline elements until matching end tag
@@ -265,7 +272,8 @@ impl MarkdownParser {
                     *index += 1;
                 },
                 Event::Text(text) => {
-                    elements.push(InlineElement::Text(text.to_string()));
+                    let normalized_text = self.normalize_whitespace(&text.to_string());
+                    elements.push(InlineElement::Text(normalized_text));
                     *index += 1;
                 },
                 Event::SoftBreak => {
@@ -421,6 +429,63 @@ impl MarkdownParser {
         let url_lower = url.to_lowercase();
         
         supported_extensions.iter().any(|ext| url_lower.ends_with(ext))
+    }
+
+    /// Normalize whitespace by replacing multiple consecutive spaces with a single space
+    fn normalize_whitespace(&self, text: &str) -> String {
+        // Use regex to replace multiple consecutive whitespace characters with a single space
+        let mut result = String::new();
+        let mut prev_was_space = false;
+        
+        for ch in text.chars() {
+            if ch.is_whitespace() {
+                if !prev_was_space {
+                    result.push(' ');
+                    prev_was_space = true;
+                }
+            } else {
+                result.push(ch);
+                prev_was_space = false;
+            }
+        }
+        
+        result
+    }
+
+    /// Merge consecutive text elements and normalize whitespace
+    fn merge_and_normalize_text_elements(&self, elements: Vec<InlineElement>) -> Vec<InlineElement> {
+        let mut result = Vec::new();
+        let mut current_text = String::new();
+        
+        for element in elements {
+            match element {
+                InlineElement::Text(text) => {
+                    current_text.push_str(&text);
+                },
+                other => {
+                    // If we have accumulated text, normalize and add it
+                    if !current_text.is_empty() {
+                        let normalized = self.normalize_whitespace(&current_text);
+                        if !normalized.is_empty() {
+                            result.push(InlineElement::Text(normalized));
+                        }
+                        current_text.clear();
+                    }
+                    // Add the non-text element
+                    result.push(other);
+                }
+            }
+        }
+        
+        // Handle any remaining text
+        if !current_text.is_empty() {
+            let normalized = self.normalize_whitespace(&current_text);
+            if !normalized.is_empty() {
+                result.push(InlineElement::Text(normalized));
+            }
+        }
+        
+        result
     }
 }
 
@@ -864,5 +929,141 @@ mod tests {
         assert!(!MarkdownParser::is_supported_image_format("document.pdf"));
         assert!(!MarkdownParser::is_supported_image_format("video.mp4"));
         assert!(!MarkdownParser::is_supported_image_format("text.txt"));
+    }
+
+    #[test]
+    fn test_normalize_whitespace() {
+        let parser = MarkdownParser::new();
+        
+        // Test multiple spaces
+        assert_eq!(parser.normalize_whitespace("hello    world"), "hello world");
+        
+        // Test mixed whitespace characters
+        assert_eq!(parser.normalize_whitespace("hello \t\n  world"), "hello world");
+        
+        // Test leading and trailing spaces (should be preserved)
+        assert_eq!(parser.normalize_whitespace("  hello  world  "), " hello world ");
+        
+        // Test single spaces (should remain unchanged)
+        assert_eq!(parser.normalize_whitespace("hello world"), "hello world");
+        
+        // Test no spaces
+        assert_eq!(parser.normalize_whitespace("helloworld"), "helloworld");
+        
+        // Test only whitespace
+        assert_eq!(parser.normalize_whitespace("   \t\n  "), " ");
+        
+        // Test empty string
+        assert_eq!(parser.normalize_whitespace(""), "");
+    }
+
+    #[test]
+    fn test_parse_paragraph_with_multiple_spaces() {
+        let parser = MarkdownParser::new();
+        let result = parser.parse("This   has    multiple     spaces.").unwrap();
+        
+        assert_eq!(result.elements.len(), 1);
+        match &result.elements[0] {
+            MarkdownElement::Paragraph { content } => {
+                assert_eq!(content.len(), 1);
+                match &content[0] {
+                    InlineElement::Text(text) => {
+                        assert_eq!(text, "This has multiple spaces.");
+                    },
+                    _ => panic!("Expected text element"),
+                }
+            },
+            _ => panic!("Expected paragraph element"),
+        }
+    }
+
+    #[test]
+    fn test_parse_paragraph_with_mixed_whitespace() {
+        let parser = MarkdownParser::new();
+        let result = parser.parse("This \t\n has   mixed\t\twhitespace.").unwrap();
+        
+        assert_eq!(result.elements.len(), 1);
+        match &result.elements[0] {
+            MarkdownElement::Paragraph { content } => {
+                // The parser should now properly merge and normalize text elements
+                assert_eq!(content.len(), 1);
+                match &content[0] {
+                    InlineElement::Text(text) => {
+                        // Should normalize all whitespace to single spaces
+                        assert_eq!(text, "This has mixed whitespace.");
+                    },
+                    _ => panic!("Expected text element"),
+                }
+            },
+            _ => panic!("Expected paragraph element"),
+        }
+    }
+
+    #[test]
+    fn test_merge_and_normalize_text_elements() {
+        let parser = MarkdownParser::new();
+        
+        // Test merging consecutive text elements
+        let elements = vec![
+            InlineElement::Text("Hello".to_string()),
+            InlineElement::Text("   ".to_string()),
+            InlineElement::Text("world".to_string()),
+        ];
+        
+        let result = parser.merge_and_normalize_text_elements(elements);
+        assert_eq!(result.len(), 1);
+        match &result[0] {
+            InlineElement::Text(text) => {
+                assert_eq!(text, "Hello world");
+            },
+            _ => panic!("Expected text element"),
+        }
+        
+        // Test with mixed elements
+        let elements = vec![
+            InlineElement::Text("Hello".to_string()),
+            InlineElement::Text("   ".to_string()),
+            InlineElement::Bold("bold".to_string()),
+            InlineElement::Text("   ".to_string()),
+            InlineElement::Text("world".to_string()),
+        ];
+        
+        let result = parser.merge_and_normalize_text_elements(elements);
+        assert_eq!(result.len(), 3);
+        match &result[0] {
+            InlineElement::Text(text) => assert_eq!(text, "Hello "),
+            _ => panic!("Expected text element"),
+        }
+        match &result[1] {
+            InlineElement::Bold(text) => assert_eq!(text, "bold"),
+            _ => panic!("Expected bold element"),
+        }
+        match &result[2] {
+            InlineElement::Text(text) => assert_eq!(text, " world"),
+            _ => panic!("Expected text element"),
+        }
+    }
+
+    #[test]
+    fn test_parse_formatted_text_with_multiple_spaces() {
+        let parser = MarkdownParser::new();
+        let result = parser.parse("This   is  **bold   text**   and   *italic    text*.").unwrap();
+        
+        assert_eq!(result.elements.len(), 1);
+        match &result.elements[0] {
+            MarkdownElement::Paragraph { content } => {
+                // Check that spaces are normalized in text elements
+                let first_text = content.iter().find_map(|element| {
+                    match element {
+                        InlineElement::Text(text) => Some(text),
+                        _ => None,
+                    }
+                }).unwrap();
+                
+                // Should not have multiple consecutive spaces
+                assert!(!first_text.contains("  "));
+            },
+            _ => panic!("Expected paragraph element"),
+        }
     }
 }
