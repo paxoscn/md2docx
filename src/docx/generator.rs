@@ -217,7 +217,8 @@ impl DocxGenerator {
         }
         
         // Create paragraph with spacing
-        let paragraph = Paragraph::new().add_run(run);
+        let paragraph = Paragraph::new().add_run(run)
+        .outline_lvl((level - 1) as usize);
 
         // Adding alignment
         let paragraph = match heading_style.alignment.clone() {
