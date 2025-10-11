@@ -1,0 +1,280 @@
+# Benchmark Configuration for Code Block Processing Performance Tests
+# This file defines various benchmark scenarios and their parameters
+
+[general]
+# Default benchmark duration in seconds
+default_duration = 30
+# Number of warmup iterations
+warmup_iterations = 100
+# Number of measurement iterations
+measurement_iterations = 1000
+# Whether to enable detailed profiling
+enable_profiling = true
+
+[scenarios]
+
+[scenarios.baseline]
+name = "Baseline Performance"
+description = "Basic performance test with default settings"
+code_block_count = 1000
+code_size = "medium"
+thread_count = 1
+enable_caching = true
+enable_optimization = false
+duration_seconds = 30
+
+[scenarios.scalability_small]
+name = "Scalability Test - Small Load"
+description = "Test performance with small number of code blocks"
+code_block_count = 100
+code_size = "medium"
+thread_count = 1
+enable_caching = true
+enable_optimization = false
+duration_seconds = 15
+
+[scenarios.scalability_medium]
+name = "Scalability Test - Medium Load"
+description = "Test performance with medium number of code blocks"
+code_block_count = 1000
+code_size = "medium"
+thread_count = 1
+enable_caching = true
+enable_optimization = false
+duration_seconds = 30
+
+[scenarios.scalability_large]
+name = "Scalability Test - Large Load"
+description = "Test performance with large number of code blocks"
+code_block_count = 10000
+code_size = "medium"
+thread_count = 1
+enable_caching = true
+enable_optimization = false
+duration_seconds = 60
+
+[scenarios.memory_small_blocks]
+name = "Memory Test - Small Blocks"
+description = "Memory usage with many small code blocks"
+code_block_count = 5000
+code_size = "small"
+thread_count = 1
+enable_caching = true
+enable_optimization = false
+duration_seconds = 45
+
+[scenarios.memory_large_blocks]
+name = "Memory Test - Large Blocks"
+description = "Memory usage with fewer large code blocks"
+code_block_count = 500
+code_size = "large"
+thread_count = 1
+enable_caching = true
+enable_optimization = false
+duration_seconds = 45
+
+[scenarios.memory_huge_blocks]
+name = "Memory Test - Huge Blocks"
+description = "Memory usage with very large code blocks"
+code_block_count = 50
+code_size = "huge"
+thread_count = 1
+enable_caching = true
+enable_optimization = false
+duration_seconds = 30
+
+[scenarios.cache_enabled]
+name = "Cache Performance - Enabled"
+description = "Performance with caching enabled"
+code_block_count = 2000
+code_size = "medium"
+thread_count = 1
+enable_caching = true
+enable_optimization = false
+duration_seconds = 45
+
+[scenarios.cache_disabled]
+name = "Cache Performance - Disabled"
+description = "Performance with caching disabled"
+code_block_count = 2000
+code_size = "medium"
+thread_count = 1
+enable_caching = false
+enable_optimization = false
+duration_seconds = 45
+
+[scenarios.concurrent_2_threads]
+name = "Concurrent Processing - 2 Threads"
+description = "Performance with 2 concurrent threads"
+code_block_count = 1000
+code_size = "medium"
+thread_count = 2
+enable_caching = true
+enable_optimization = false
+duration_seconds = 30
+
+[scenarios.concurrent_4_threads]
+name = "Concurrent Processing - 4 Threads"
+description = "Performance with 4 concurrent threads"
+code_block_count = 1000
+code_size = "medium"
+thread_count = 4
+enable_caching = true
+enable_optimization = false
+duration_seconds = 30
+
+[scenarios.concurrent_8_threads]
+name = "Concurrent Processing - 8 Threads"
+description = "Performance with 8 concurrent threads"
+code_block_count = 1000
+code_size = "medium"
+thread_count = 8
+enable_caching = true
+enable_optimization = false
+duration_seconds = 30
+
+[scenarios.concurrent_16_threads]
+name = "Concurrent Processing - 16 Threads"
+description = "Performance with 16 concurrent threads"
+code_block_count = 1000
+code_size = "medium"
+thread_count = 16
+enable_caching = true
+enable_optimization = false
+duration_seconds = 30
+
+[scenarios.optimization_enabled]
+name = "Optimization Test - Enabled"
+description = "Performance with automatic optimization enabled"
+code_block_count = 5000
+code_size = "large"
+thread_count = 4
+enable_caching = true
+enable_optimization = true
+duration_seconds = 120
+
+[scenarios.optimization_disabled]
+name = "Optimization Test - Disabled"
+description = "Performance with automatic optimization disabled"
+code_block_count = 5000
+code_size = "large"
+thread_count = 4
+enable_caching = true
+enable_optimization = false
+duration_seconds = 120
+
+[scenarios.stress_test]
+name = "Stress Test"
+description = "High-load stress test with mixed workload"
+code_block_count = 20000
+code_size = "mixed"
+thread_count = 8
+enable_caching = true
+enable_optimization = true
+duration_seconds = 300
+
+[scenarios.stability_test]
+name = "Stability Test"
+description = "Long-running stability test"
+code_block_count = 50000
+code_size = "medium"
+thread_count = 4
+enable_caching = true
+enable_optimization = true
+duration_seconds = 600
+
+# Performance thresholds for pass/fail criteria
+[thresholds]
+# Minimum acceptable throughput (operations per second)
+min_throughput = 10.0
+# Maximum acceptable average latency (milliseconds)
+max_average_latency = 1000
+# Maximum acceptable P95 latency (milliseconds)
+max_p95_latency = 5000
+# Maximum acceptable P99 latency (milliseconds)
+max_p99_latency = 10000
+# Minimum acceptable success rate (percentage)
+min_success_rate = 95.0
+# Maximum acceptable memory growth rate (MB per second)
+max_memory_growth_rate = 1.0
+# Minimum acceptable cache hit ratio (percentage)
+min_cache_hit_ratio = 30.0
+
+# Cache configuration for benchmarks
+[cache]
+# Maximum number of cache entries
+max_entries = 10000
+# Maximum cache memory usage in MB
+max_memory_mb = 100
+# Cache entry TTL in seconds
+entry_ttl_seconds = 3600
+
+# Memory profiling configuration
+[memory_profiling]
+# Whether to enable detailed allocation tracking
+enable_allocation_tracking = true
+# Whether to capture stack traces (expensive)
+capture_stack_traces = false
+# Memory snapshot interval in seconds
+snapshot_interval_seconds = 10
+# Memory warning threshold in MB
+warning_threshold_mb = 100
+# Memory critical threshold in MB
+critical_threshold_mb = 500
+
+# Optimization configuration
+[optimization]
+# Whether to enable automatic optimization
+enable_auto_optimization = true
+# Optimization interval in seconds
+optimization_interval_seconds = 60
+# Performance score threshold for triggering optimization
+performance_threshold = 0.6
+# Memory utilization threshold for optimization (percentage)
+memory_threshold_percent = 80.0
+# Cache hit ratio threshold for cache optimization
+cache_threshold = 0.4
+
+# Code generation settings for benchmarks
+[code_generation]
+# Base patterns for different code sizes
+[code_generation.small]
+min_size_bytes = 50
+max_size_bytes = 200
+complexity = "low"
+
+[code_generation.medium]
+min_size_bytes = 500
+max_size_bytes = 2000
+complexity = "medium"
+
+[code_generation.large]
+min_size_bytes = 5000
+max_size_bytes = 20000
+complexity = "high"
+
+[code_generation.huge]
+min_size_bytes = 50000
+max_size_bytes = 200000
+complexity = "very_high"
+
+# Language distribution for mixed workloads
+[code_generation.languages]
+rust = 40
+javascript = 25
+python = 20
+json = 10
+sql = 5
+
+# Reporting configuration
+[reporting]
+# Output format: "console", "json", "csv", "html"
+output_format = "console"
+# Whether to generate detailed reports
+detailed_reports = true
+# Whether to include performance graphs
+include_graphs = false
+# Report output directory
+output_directory = "benchmark_results"
+# Whether to compare with previous results
+enable_comparison = true

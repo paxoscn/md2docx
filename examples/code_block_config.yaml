@@ -1,0 +1,94 @@
+# Code Block Processing Configuration
+# This file demonstrates the configuration options for the code block strategy system
+
+global:
+  # Enable or disable code block processing globally
+  enable_processing: true
+  
+  # Default timeout for processing operations (in milliseconds)
+  default_timeout_ms: 5000
+  
+  # Maximum number of processed code blocks to cache
+  max_cache_size: 1000
+  
+  # Enable parallel processing of multiple code blocks (experimental)
+  enable_parallel_processing: false
+
+# Language-specific configurations
+languages:
+  # Rust configuration
+  rust:
+    enable_syntax_validation: true
+    enable_formatting: true
+    formatter_options:
+      edition: "2021"
+      max_width: 100
+    custom_options:
+      clippy_lints: "true"
+  
+  # JavaScript configuration  
+  javascript:
+    enable_syntax_validation: true
+    enable_formatting: true
+    formatter_options:
+      semicolons: "true"
+      single_quotes: "false"
+      tab_width: 2
+    custom_options:
+      eslint_config: "standard"
+  
+  # TypeScript configuration
+  typescript:
+    enable_syntax_validation: true
+    enable_formatting: true
+    formatter_options:
+      semicolons: "true"
+      single_quotes: "false"
+      tab_width: 2
+    custom_options:
+      strict_mode: "true"
+  
+  # Python configuration
+  python:
+    enable_syntax_validation: true
+    enable_formatting: true
+    formatter_options:
+      line_length: "88"
+      indent_size: "4"
+    custom_options:
+      black_compatible: "true"
+  
+  # JSON configuration
+  json:
+    enable_syntax_validation: true
+    enable_formatting: true
+    formatter_options:
+      indent_size: "2"
+      sort_keys: "false"
+    custom_options: {}
+  
+  # SQL configuration
+  sql:
+    enable_syntax_validation: false  # Disabled by default
+    enable_formatting: true
+    formatter_options:
+      uppercase_keywords: "true"
+      indent_size: "2"
+    custom_options: {}
+  
+  # YAML configuration
+  yaml:
+    enable_syntax_validation: true
+    enable_formatting: true
+    formatter_options:
+      indent_size: "2"
+      preserve_quotes: "false"
+    custom_options: {}
+  
+  # Markdown configuration (for nested markdown)
+  markdown:
+    enable_syntax_validation: false
+    enable_formatting: true
+    formatter_options:
+      line_length: "80"
+    custom_options: {}

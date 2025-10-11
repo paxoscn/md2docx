@@ -19,6 +19,7 @@ pub enum MarkdownElement {
     CodeBlock {
         language: Option<String>,
         code: String,
+        processed: Option<crate::markdown::code_block::ProcessedCodeBlock>,
     },
     List {
         ordered: bool,
@@ -94,6 +95,44 @@ impl MarkdownDocument {
         self.get_elements_by_type(|e| matches!(e, MarkdownElement::CodeBlock { .. }))
     }
 
+    /// Get all code blocks mutably in the document
+    pub fn get_code_blocks_mut(&mut self) -> Vec<&mut MarkdownElement> {
+        self.elements.iter_mut().filter(|e| e.is_code_block()).collect()
+    }
+
+    /// Get code blocks by language
+    pub fn get_code_blocks_by_language(&self, language: &str) -> Vec<&MarkdownElement> {
+        self.get_code_blocks().into_iter()
+            .filter(|e| {
+                e.get_code_block_language()
+                    .map(|lang| lang.eq_ignore_ascii_case(language))
+                    .unwrap_or(false)
+            })
+            .collect()
+    }
+
+    /// Get unprocessed code blocks
+    pub fn get_unprocessed_code_blocks(&self) -> Vec<&MarkdownElement> {
+        self.get_code_blocks().into_iter()
+            .filter(|e| !e.is_code_block_processed())
+            .collect()
+    }
+
+    /// Get processed code blocks
+    pub fn get_processed_code_blocks(&self) -> Vec<&MarkdownElement> {
+        self.get_code_blocks().into_iter()
+            .filter(|e| e.is_code_block_processed())
+            .collect()
+    }
+
+    /// Count code blocks by processing status
+    pub fn count_code_blocks_by_status(&self) -> (usize, usize) {
+        let code_blocks = self.get_code_blocks();
+        let processed_count = code_blocks.iter().filter(|e| e.is_code_block_processed()).count();
+        let total_count = code_blocks.len();
+        (processed_count, total_count - processed_count)
+    }
+
     /// Get all tables in the document
     pub fn get_tables(&self) -> Vec<&MarkdownElement> {
         self.get_elements_by_type(|e| matches!(e, MarkdownElement::Table { .. }))
@@ -143,8 +182,12 @@ impl MarkdownDocument {
                     }
                     text.push('\n');
                 }
-                MarkdownElement::CodeBlock { code, .. } => {
-                    text.push_str(code);
+                MarkdownElement::CodeBlock { processed, code, .. } => {
+                    // Use processed code if available, otherwise use original
+                    let final_code = processed.as_ref()
+                        .map(|p| p.get_final_code())
+                        .unwrap_or(code);
+                    text.push_str(final_code);
                     text.push('\n');
                 }
                 _ => {}
@@ -204,6 +247,66 @@ impl MarkdownElement {
         )
     }
 
+    /// Check if this is a code block element
+    pub fn is_code_block(&self) -> bool {
+        matches!(self, MarkdownElement::CodeBlock { .. })
+    }
+
+    /// Get the code block's language if this is a code block
+    pub fn get_code_block_language(&self) -> Option<&String> {
+        match self {
+            MarkdownElement::CodeBlock { language, .. } => language.as_ref(),
+            _ => None,
+        }
+    }
+
+    /// Get the code block's original code if this is a code block
+    pub fn get_code_block_code(&self) -> Option<&String> {
+        match self {
+            MarkdownElement::CodeBlock { code, .. } => Some(code),
+            _ => None,
+        }
+    }
+
+    /// Get the code block's processed result if this is a code block
+    pub fn get_code_block_processed(&self) -> Option<&crate::markdown::code_block::ProcessedCodeBlock> {
+        match self {
+            MarkdownElement::CodeBlock { processed, .. } => processed.as_ref(),
+            _ => None,
+        }
+    }
+
+    /// Set the processed result for a code block
+    pub fn set_code_block_processed(&mut self, processed_block: crate::markdown::code_block::ProcessedCodeBlock) -> Result<(), &'static str> {
+        match self {
+            MarkdownElement::CodeBlock { processed, .. } => {
+                *processed = Some(processed_block);
+                Ok(())
+            }
+            _ => Err("Element is not a code block"),
+        }
+    }
+
+    /// Get the final code content for a code block (processed if available, otherwise original)
+    pub fn get_code_block_final_code(&self) -> Option<&str> {
+        match self {
+            MarkdownElement::CodeBlock { processed, code, .. } => {
+                Some(processed.as_ref()
+                    .map(|p| p.get_final_code())
+                    .unwrap_or(code))
+            }
+            _ => None,
+        }
+    }
+
+    /// Check if a code block has been processed
+    pub fn is_code_block_processed(&self) -> bool {
+        match self {
+            MarkdownElement::CodeBlock { processed, .. } => processed.is_some(),
+            _ => false,
+        }
+    }
+
     /// Extract plain text from the element
     pub fn extract_text(&self) -> String {
         match self {
@@ -211,7 +314,12 @@ impl MarkdownElement {
             MarkdownElement::Paragraph { content } => {
                 content.iter().map(|inline| inline.extract_text()).collect::<Vec<_>>().join("")
             }
-            MarkdownElement::CodeBlock { code, .. } => code.clone(),
+            MarkdownElement::CodeBlock { processed, code, .. } => {
+                // Use processed code if available, otherwise use original
+                processed.as_ref()
+                    .map(|p| p.get_final_code().to_string())
+                    .unwrap_or_else(|| code.clone())
+            },
             MarkdownElement::List { items, .. } => {
                 items.iter().map(|item| item.extract_text()).collect::<Vec<_>>().join("\n")
             }
@@ -467,14 +575,83 @@ mod tests {
         let code_block = MarkdownElement::CodeBlock {
             language: Some("rust".to_string()),
             code: "fn main() {\n    println!(\"Hello\");\n}".to_string(),
+            processed: None,
         };
         
         assert_eq!(code_block.element_type(), "code_block");
         assert!(code_block.has_text_content());
+        assert!(code_block.is_code_block());
+        assert!(!code_block.is_code_block_processed());
         
         let extracted = code_block.extract_text();
         assert!(extracted.contains("fn main()"));
         assert!(extracted.contains("println!"));
+        
+        // Test helper methods
+        assert_eq!(code_block.get_code_block_language(), Some(&"rust".to_string()));
+        assert_eq!(code_block.get_code_block_code(), Some(&"fn main() {\n    println!(\"Hello\");\n}".to_string()));
+        assert!(code_block.get_code_block_processed().is_none());
+        assert_eq!(code_block.get_code_block_final_code(), Some("fn main() {\n    println!(\"Hello\");\n}"));
+    }
+
+    #[test]
+    fn test_code_block_with_processed_result() {
+        use crate::markdown::code_block::ProcessedCodeBlock;
+        
+        let original_code = "fn main(){println!(\"Hello\");}";
+        let formatted_code = "fn main() {\n    println!(\"Hello\");\n}";
+        
+        let processed = ProcessedCodeBlock::new(
+            original_code.to_string(),
+            Some("rust".to_string())
+        )
+        .with_processed_code(formatted_code.to_string())
+        .with_validation(true);
+        
+        let mut code_block = MarkdownElement::CodeBlock {
+            language: Some("rust".to_string()),
+            code: original_code.to_string(),
+            processed: None,
+        };
+        
+        // Test setting processed result
+        assert!(code_block.set_code_block_processed(processed).is_ok());
+        assert!(code_block.is_code_block_processed());
+        
+        // Test that final code returns processed version
+        assert_eq!(code_block.get_code_block_final_code(), Some(formatted_code));
+        
+        // Test that extract_text returns processed version
+        let extracted = code_block.extract_text();
+        assert_eq!(extracted, formatted_code);
+        
+        // Test processed result access
+        let processed_result = code_block.get_code_block_processed().unwrap();
+        assert_eq!(processed_result.original_code, original_code);
+        assert_eq!(processed_result.get_final_code(), formatted_code);
+        assert!(processed_result.metadata.is_formatted);
+        assert!(processed_result.metadata.syntax_valid);
+    }
+
+    #[test]
+    fn test_code_block_helper_methods_on_non_code_block() {
+        let heading = MarkdownElement::Heading {
+            level: 1,
+            text: "Title".to_string(),
+        };
+        
+        assert!(!heading.is_code_block());
+        assert!(heading.get_code_block_language().is_none());
+        assert!(heading.get_code_block_code().is_none());
+        assert!(heading.get_code_block_processed().is_none());
+        assert!(heading.get_code_block_final_code().is_none());
+        assert!(!heading.is_code_block_processed());
+        
+        // Test that setting processed result fails on non-code-block
+        use crate::markdown::code_block::ProcessedCodeBlock;
+        let processed = ProcessedCodeBlock::new("test".to_string(), None);
+        let mut heading_mut = heading;
+        assert!(heading_mut.set_code_block_processed(processed).is_err());
     }
 
     #[test]
@@ -594,5 +771,98 @@ mod tests {
         
         let extracted = paragraph.extract_text();
         assert_eq!(extracted, "This is bold and this is italic and this is code and this is a link");
+    }
+
+    #[test]
+    fn test_document_code_block_methods() {
+        use crate::markdown::code_block::ProcessedCodeBlock;
+        
+        let mut doc = MarkdownDocument::new();
+        
+        // Add various elements including code blocks
+        doc.add_element(MarkdownElement::Heading {
+            level: 1,
+            text: "Title".to_string(),
+        });
+        
+        doc.add_element(MarkdownElement::CodeBlock {
+            language: Some("rust".to_string()),
+            code: "fn main() {}".to_string(),
+            processed: None,
+        });
+        
+        doc.add_element(MarkdownElement::CodeBlock {
+            language: Some("javascript".to_string()),
+            code: "console.log('hello');".to_string(),
+            processed: None,
+        });
+        
+        doc.add_element(MarkdownElement::CodeBlock {
+            language: Some("rust".to_string()),
+            code: "let x = 5;".to_string(),
+            processed: Some(ProcessedCodeBlock::new(
+                "let x = 5;".to_string(),
+                Some("rust".to_string())
+            )),
+        });
+        
+        // Test code block retrieval methods
+        let all_code_blocks = doc.get_code_blocks();
+        assert_eq!(all_code_blocks.len(), 3);
+        
+        let rust_blocks = doc.get_code_blocks_by_language("rust");
+        assert_eq!(rust_blocks.len(), 2);
+        
+        let js_blocks = doc.get_code_blocks_by_language("javascript");
+        assert_eq!(js_blocks.len(), 1);
+        
+        let python_blocks = doc.get_code_blocks_by_language("python");
+        assert_eq!(python_blocks.len(), 0);
+        
+        // Test processing status methods
+        let unprocessed = doc.get_unprocessed_code_blocks();
+        assert_eq!(unprocessed.len(), 2);
+        
+        let processed = doc.get_processed_code_blocks();
+        assert_eq!(processed.len(), 1);
+        
+        let (processed_count, unprocessed_count) = doc.count_code_blocks_by_status();
+        assert_eq!(processed_count, 1);
+        assert_eq!(unprocessed_count, 2);
+    }
+
+    #[test]
+    fn test_document_code_block_mutation() {
+        use crate::markdown::code_block::ProcessedCodeBlock;
+        
+        let mut doc = MarkdownDocument::new();
+        
+        doc.add_element(MarkdownElement::CodeBlock {
+            language: Some("rust".to_string()),
+            code: "fn main(){}".to_string(),
+            processed: None,
+        });
+        
+        doc.add_element(MarkdownElement::Paragraph {
+            content: vec![InlineElement::Text("Not a code block".to_string())],
+        });
+        
+        // Test mutable access to code blocks
+        let mut code_blocks_mut = doc.get_code_blocks_mut();
+        assert_eq!(code_blocks_mut.len(), 1);
+        
+        // Process the code block
+        let processed = ProcessedCodeBlock::new(
+            "fn main(){}".to_string(),
+            Some("rust".to_string())
+        )
+        .with_processed_code("fn main() {}\n".to_string());
+        
+        assert!(code_blocks_mut[0].set_code_block_processed(processed).is_ok());
+        
+        // Verify the change
+        let (processed_count, unprocessed_count) = doc.count_code_blocks_by_status();
+        assert_eq!(processed_count, 1);
+        assert_eq!(unprocessed_count, 0);
     }
 }

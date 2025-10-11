@@ -1,0 +1,356 @@
+# Advanced Code Block Processing Configuration
+# This configuration demonstrates advanced features and options
+
+global:
+  # Enable code block processing system-wide
+  enable_processing: true
+  
+  # Default timeout for all processing operations (milliseconds)
+  default_timeout_ms: 10000
+  
+  # Maximum cache size for processed code blocks
+  max_cache_size: 2000
+  
+  # Enable parallel processing (experimental - may increase memory usage)
+  enable_parallel_processing: true
+  
+  # Maximum number of parallel processing threads
+  max_parallel_threads: 4
+  
+  # Enable performance monitoring and metrics collection
+  enable_performance_monitoring: true
+  
+  # Log level for code block processing (error, warn, info, debug, trace)
+  log_level: "info"
+  
+  # Enable fallback to default strategy on errors
+  enable_fallback_strategy: true
+
+# Performance optimization settings
+performance:
+  # Enable lazy loading of strategies (load only when needed)
+  enable_lazy_loading: true
+  
+  # Enable memory optimization features
+  enable_memory_optimization: true
+  
+  # Cache processed results to disk for persistence
+  enable_disk_cache: false
+  disk_cache_path: "/tmp/code_block_cache"
+  
+  # Maximum memory usage for processing (MB)
+  max_memory_usage_mb: 512
+
+# Error handling configuration
+error_handling:
+  # Continue processing other blocks if one fails
+  continue_on_error: true
+  
+  # Maximum number of errors before stopping batch processing
+  max_errors: 10
+  
+  # Include detailed error context in results
+  include_error_context: true
+  
+  # Retry failed processing with fallback strategy
+  retry_with_fallback: true
+
+# Language-specific configurations with advanced options
+languages:
+  # Rust configuration with comprehensive options
+  rust:
+    enable_syntax_validation: true
+    enable_formatting: true
+    enable_optimization: true
+    
+    # Rust-specific formatter options
+    formatter_options:
+      edition: "2021"
+      max_width: 100
+      hard_tabs: false
+      tab_spaces: 4
+      newline_style: "Unix"
+      use_small_heuristics: "Default"
+      indent_style: "Block"
+      wrap_comments: true
+      format_code_in_doc_comments: true
+      normalize_comments: true
+      normalize_doc_attributes: true
+      license_template_path: ""
+      format_strings: false
+      format_macro_matchers: true
+      format_macro_bodies: true
+      hex_literal_case: "Preserve"
+      
+    # Code quality checks
+    quality_checks:
+      warn_on_unwrap: true
+      warn_on_panic: true
+      warn_on_todo: true
+      warn_on_fixme: true
+      max_line_length: 100
+      max_function_length: 100
+      
+    # Custom linting rules
+    custom_options:
+      clippy_lints: "true"
+      clippy_config: "clippy.toml"
+      rustfmt_config: "rustfmt.toml"
+      check_unsafe_code: "true"
+      
+  # JavaScript/TypeScript with ESLint integration
+  javascript:
+    enable_syntax_validation: true
+    enable_formatting: true
+    enable_optimization: false
+    
+    formatter_options:
+      semicolons: true
+      single_quotes: false
+      tab_width: 2
+      use_tabs: false
+      trailing_comma: "es5"
+      bracket_spacing: true
+      jsx_bracket_same_line: false
+      arrow_parens: "always"
+      prose_wrap: "preserve"
+      html_whitespace_sensitivity: "css"
+      end_of_line: "lf"
+      
+    quality_checks:
+      warn_on_console_log: true
+      warn_on_debugger: true
+      warn_on_alert: true
+      max_complexity: 10
+      max_depth: 4
+      
+    custom_options:
+      eslint_config: ".eslintrc.json"
+      prettier_config: ".prettierrc"
+      babel_config: ".babelrc"
+      
+  # TypeScript extends JavaScript with additional options
+  typescript:
+    extends: "javascript"  # Inherit from JavaScript config
+    enable_syntax_validation: true
+    enable_formatting: true
+    
+    formatter_options:
+      semicolons: true
+      single_quotes: false
+      tab_width: 2
+      
+    quality_checks:
+      strict_null_checks: true
+      no_implicit_any: true
+      no_unused_locals: true
+      no_unused_parameters: true
+      
+    custom_options:
+      tsconfig_path: "tsconfig.json"
+      type_checking: "true"
+      
+  # Python with Black and Pylint integration
+  python:
+    enable_syntax_validation: true
+    enable_formatting: true
+    enable_optimization: false
+    
+    formatter_options:
+      line_length: 88
+      target_version: ["py38", "py39", "py310"]
+      include: "\\.pyi?$"
+      exclude: "/(\\.|venv|build|dist)/"
+      skip_string_normalization: false
+      skip_magic_trailing_comma: false
+      
+    quality_checks:
+      pep8_compliance: true
+      max_line_length: 88
+      max_function_length: 50
+      warn_on_unused_imports: true
+      
+    custom_options:
+      black_config: "pyproject.toml"
+      pylint_config: ".pylintrc"
+      mypy_config: "mypy.ini"
+      
+  # Go with gofmt and golint
+  go:
+    enable_syntax_validation: true
+    enable_formatting: true
+    
+    formatter_options:
+      use_gofmt: true
+      use_goimports: true
+      tab_width: 8
+      
+    quality_checks:
+      golint_enabled: true
+      govet_enabled: true
+      ineffassign_enabled: true
+      
+    custom_options:
+      go_version: "1.19"
+      
+  # C/C++ with clang-format
+  c:
+    enable_syntax_validation: false  # Requires external compiler
+    enable_formatting: true
+    
+    formatter_options:
+      style: "LLVM"
+      indent_width: 4
+      use_tabs: false
+      column_limit: 100
+      
+    custom_options:
+      clang_format_config: ".clang-format"
+      
+  cpp:
+    extends: "c"
+    formatter_options:
+      style: "Google"
+      standard: "C++17"
+      
+  # Java with Google Java Format
+  java:
+    enable_syntax_validation: false
+    enable_formatting: true
+    
+    formatter_options:
+      style: "GOOGLE"
+      indent_size: 2
+      
+    quality_checks:
+      max_line_length: 100
+      
+  # JSON with comprehensive validation
+  json:
+    enable_syntax_validation: true
+    enable_formatting: true
+    
+    formatter_options:
+      indent_size: 2
+      sort_keys: false
+      ensure_ascii: false
+      
+    quality_checks:
+      validate_schema: false
+      schema_path: ""
+      
+    custom_options:
+      allow_comments: "false"  # JSON doesn't allow comments by default
+      allow_trailing_commas: "false"
+      
+  # YAML with validation
+  yaml:
+    enable_syntax_validation: true
+    enable_formatting: true
+    
+    formatter_options:
+      indent_size: 2
+      preserve_quotes: false
+      width: 80
+      
+    quality_checks:
+      validate_schema: false
+      schema_path: ""
+      
+  # SQL with formatting
+  sql:
+    enable_syntax_validation: false
+    enable_formatting: true
+    
+    formatter_options:
+      uppercase_keywords: true
+      indent_size: 2
+      max_line_length: 120
+      
+    custom_options:
+      dialect: "postgresql"  # mysql, postgresql, sqlite, etc.
+      
+  # Shell scripts
+  bash:
+    enable_syntax_validation: false
+    enable_formatting: true
+    
+    formatter_options:
+      indent_size: 2
+      binary_next_line: true
+      switch_case_indent: true
+      
+    quality_checks:
+      shellcheck_enabled: false
+      
+  # Dockerfile
+  dockerfile:
+    enable_syntax_validation: false
+    enable_formatting: true
+    
+    quality_checks:
+      hadolint_enabled: false
+      
+  # Markdown (for nested markdown blocks)
+  markdown:
+    enable_syntax_validation: false
+    enable_formatting: true
+    
+    formatter_options:
+      line_length: 80
+      prose_wrap: "always"
+      
+  # HTML
+  html:
+    enable_syntax_validation: false
+    enable_formatting: true
+    
+    formatter_options:
+      indent_size: 2
+      wrap_line_length: 120
+      
+  # CSS
+  css:
+    enable_syntax_validation: false
+    enable_formatting: true
+    
+    formatter_options:
+      indent_size: 2
+      single_quotes: false
+
+# Plugin configuration
+plugins:
+  # Enable plugin system
+  enable_plugins: true
+  
+  # Plugin search paths
+  plugin_paths:
+    - "./plugins"
+    - "~/.config/md2docx/plugins"
+    
+  # Auto-load plugins from search paths
+  auto_load_plugins: true
+  
+  # Plugin-specific configurations
+  plugin_configs:
+    "json-processor":
+      enable_formatting: true
+      indent_size: 4
+      
+    "xml-processor":
+      validate_dtd: false
+      
+# Experimental features (use with caution)
+experimental:
+  # AI-powered code completion and suggestions
+  enable_ai_suggestions: false
+  ai_model: "gpt-3.5-turbo"
+  
+  # Automatic code optimization
+  enable_auto_optimization: false
+  
+  # Cross-language code translation
+  enable_code_translation: false
+  
+  # Real-time collaboration features
+  enable_collaboration: false

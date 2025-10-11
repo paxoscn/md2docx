@@ -146,6 +146,7 @@ pub fn create_test_document() -> MarkdownDocument {
             MarkdownElement::CodeBlock {
                 language: Some("rust".to_string()),
                 code: "fn main() {\n    println!(\"Hello, world!\");\n}".to_string(),
+                processed: None,
             },
             MarkdownElement::List {
                 ordered: false,

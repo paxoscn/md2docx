@@ -38,6 +38,9 @@ pub enum ConversionError {
     
     #[error("Validation error: {0}")]
     Validation(String),
+    
+    #[error("Code block processing error: {0}")]
+    ProcessingError(String),
 }
 
 /// Configuration-specific error types
@@ -149,6 +152,11 @@ impl ConversionError {
         Self::Validation(msg.into())
     }
     
+    /// Create a new processing error
+    pub fn processing_error<S: Into<String>>(msg: S) -> Self {
+        Self::ProcessingError(msg.into())
+    }
+    
     /// Check if this error is recoverable
     pub fn is_recoverable(&self) -> bool {
         match self {
@@ -163,6 +171,7 @@ impl ConversionError {
             Self::ResourceLimit(_) => true,
             Self::Timeout(_) => true,
             Self::Validation(_) => true,
+            Self::ProcessingError(_) => true,
         }
     }
     
@@ -180,6 +189,7 @@ impl ConversionError {
             Self::ResourceLimit(_) => ErrorCategory::Resource,
             Self::Timeout(_) => ErrorCategory::Timeout,
             Self::Validation(_) => ErrorCategory::Validation,
+            Self::ProcessingError(_) => ErrorCategory::FileProcessing,
         }
     }
 }

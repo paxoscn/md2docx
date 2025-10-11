@@ -20,7 +20,7 @@ use tower::ServiceExt;
 /// Helper function to create test app
 async fn create_test_app() -> Router {
     let config = ConversionConfig::default();
-    let engine = Arc::new(std::sync::Mutex::new(ConversionEngine::new(config)));
+    let engine = Arc::new(tokio::sync::Mutex::new(ConversionEngine::new(config)));
     let app_state = AppState {
         conversion_engine: engine,
         task_queue: None,
@@ -376,7 +376,7 @@ async fn test_conversion_timeout() {
 async fn test_full_conversion_pipeline() {
     // Test the complete conversion pipeline without HTTP
     let config = ConversionConfig::default();
-    let engine = ConversionEngine::new(config);
+    let mut engine = ConversionEngine::new(config);
     
     let markdown = test_markdown_content();
     
@@ -402,7 +402,7 @@ async fn test_full_conversion_pipeline() {
 #[tokio::test]
 async fn test_batch_file_conversion() {
     let config = ConversionConfig::default();
-    let engine = ConversionEngine::new(config);
+    let mut engine = ConversionEngine::new(config);
     
     // Create temporary directory with test files
     let temp_dir = TempDir::new().unwrap();
@@ -449,7 +449,7 @@ async fn test_batch_file_conversion() {
 #[tokio::test]
 async fn test_error_handling_integration() {
     let config = ConversionConfig::default();
-    let engine = ConversionEngine::new(config);
+    let mut engine = ConversionEngine::new(config);
     
     // Test file not found error
     let result = engine.convert_file("nonexistent.md", "output.docx").await;
@@ -486,7 +486,7 @@ async fn test_configuration_validation_integration() {
 #[tokio::test]
 async fn test_memory_usage_integration() {
     let config = ConversionConfig::default();
-    let engine = ConversionEngine::new(config);
+    let mut engine = ConversionEngine::new(config);
     
     // Create progressively larger documents and test memory usage
     for size in [100, 1000, 5000] {
@@ -545,7 +545,7 @@ async fn test_numbering_configuration_integration() {
     // Validate the configuration with numbering
     assert!(config.validate().is_ok());
     
-    let engine = ConversionEngine::new(config);
+    let mut engine = ConversionEngine::new(config);
     
     // Test markdown with multiple heading levels
     let markdown_with_headings = r#"# First Chapter

@@ -15,6 +15,10 @@ path = "src/bin/server.rs"
 name = "md2docx-cli"
 path = "src/bin/cli.rs"
 
+[[bin]]
+name = "performance-test-runner"
+path = "src/bin/performance_test_runner.rs"
+
 [dependencies]
 # Web framework
 axum = { version = "0.7", features = ["multipart"] }
@@ -63,6 +67,10 @@ tokio-util = "0.7"
 
 # Regular expressions
 regex = "1.0"
+
+# Code processing
+syn = { version = "2.0", features = ["full", "parsing"] }
+quote = "1.0"
 
 [dev-dependencies]
 tokio-test = "0.4"

@@ -1244,7 +1244,6 @@ mod tests {
         document.add_element(MarkdownElement::CodeBlock {
             language: Some("rust".to_string()),
             code: "fn main() {\n    println!(\"Hello, world!\");\n}".to_string(),
-            processed: None,
         });
 
         let result = generator.generate(&document);
@@ -1331,7 +1330,6 @@ mod tests {
         document.add_element(MarkdownElement::CodeBlock {
             language: Some("rust".to_string()),
             code: code_with_edge_cases.to_string(),
-            processed: None,
         });
 
         let result = generator.generate(&document);
@@ -1351,7 +1349,6 @@ mod tests {
         document.add_element(MarkdownElement::CodeBlock {
             language: Some("rust".to_string()),
             code: "fn main() {\n    println!(\"Hello, world!\");\n}".to_string(),
-            processed: None,
         });
 
         let result = generator.generate(&document);
@@ -1371,7 +1368,6 @@ mod tests {
         document.add_element(MarkdownElement::CodeBlock {
             language: Some("text".to_string()),
             code: "".to_string(),
-            processed: None,
         });
 
         let result = generator.generate(&document);
@@ -1395,7 +1391,6 @@ mod tests {
         document.add_element(MarkdownElement::CodeBlock {
             language: Some("javascript".to_string()),
             code: code_with_tabs.to_string(),
-            processed: None,
         });
 
         let result = generator.generate(&document);
@@ -1418,7 +1413,6 @@ mod tests {
         document.add_element(MarkdownElement::CodeBlock {
             language: Some("text".to_string()),
             code: code_with_empty_lines.to_string(),
-            processed: None,
         });
 
         let result = generator.generate(&document);
@@ -1442,7 +1436,6 @@ mod tests {
         document.add_element(MarkdownElement::CodeBlock {
             language: Some("text".to_string()),
             code: code_with_long_lines,
-            processed: None,
         });
 
         let result = generator.generate(&document);
@@ -1464,7 +1457,6 @@ mod tests {
         document.add_element(MarkdownElement::CodeBlock {
             language: Some("rust".to_string()),
             code: "fn main() {\n    println!(\"Hello\");\n}".to_string(),
-            processed: None,
         });
 
         let result = generator.generate(&document);
@@ -1491,7 +1483,6 @@ mod tests {
         document.add_element(MarkdownElement::CodeBlock {
             language: Some("text".to_string()),
             code: code.to_string(),
-            processed: None,
         });
 
         // Both should succeed but may produce different output
@@ -1937,7 +1928,6 @@ mod tests {
         document.add_element(MarkdownElement::CodeBlock {
             language: Some("python".to_string()),
             code: "def hello_world():\n    print('Hello, World!')\n\n    return 'success'\n\nif __name__ == '__main__':\n    hello_world()".to_string(),
-            processed: None,
         });
 
         let result = generator.generate(&document);
@@ -1981,7 +1971,6 @@ mod tests {
         document.add_element(MarkdownElement::CodeBlock {
             language: Some("rust".to_string()),
             code: "let x = 42;".to_string(),
-            processed: None,
         });
 
         let result = generator.generate(&document);
@@ -2008,7 +1997,6 @@ mod tests {
         document.add_element(MarkdownElement::CodeBlock {
             language: Some("rust".to_string()),
             code: multi_line_code.to_string(),
-            processed: None,
         });
 
         let result = generator.generate(&document);
@@ -2043,7 +2031,6 @@ mod tests {
         document.add_element(MarkdownElement::CodeBlock {
             language: Some("text".to_string()),
             code: "".to_string(),
-            processed: None,
         });
 
         let result = generator.generate(&document);
@@ -2109,7 +2096,6 @@ mod tests {
         document.add_element(MarkdownElement::CodeBlock {
             language: Some("rust".to_string()),
             code: "println!(\"test\");".to_string(),
-            processed: None,
         });
 
         let result_no_border_doc = generator_no_border.generate(&document);
@@ -2140,7 +2126,6 @@ mod tests {
         document.add_element(MarkdownElement::CodeBlock {
             language: Some("rust".to_string()),
             code: code_with_styling.to_string(),
-            processed: None,
         });
 
         let result = generator.generate(&document);
@@ -2223,7 +2208,6 @@ mod tests {
         document.add_element(MarkdownElement::CodeBlock {
             language: Some("rust".to_string()),
             code: special_code.to_string(),
-            processed: None,
         });
 
         let result = generator.generate(&document);

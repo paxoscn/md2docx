@@ -621,3 +621,59 @@ docker run -p 3000:3000 -e OPENAI_API_KEY=your_key md2docx-converter
 ### Load Balancing
 
 The API is stateless and can be horizontally scaled behind a load balancer.
+
+## Code Block Processing
+
+The system includes a sophisticated code block processing system that can validate, format, and enhance code blocks in different programming languages.
+
+### Supported Languages
+
+- **Rust**: Full syntax validation and formatting using the `syn` crate
+- **JavaScript/TypeScript**: Basic processing with configurable options
+- **Python**: Syntax validation and formatting
+- **JSON**: Validation and pretty-printing
+- **SQL**: Basic formatting
+- **And more**: Extensible through the plugin system
+
+### Code Block Configuration
+
+Code block processing can be configured through the main YAML configuration:
+
+```yaml
+# Code block processing configuration
+code_blocks:
+  global:
+    enable_processing: true
+    default_timeout_ms: 5000
+    max_cache_size: 1000
+  
+  languages:
+    rust:
+      enable_syntax_validation: true
+      enable_formatting: true
+      formatter_options:
+        edition: "2021"
+        max_width: 100
+    
+    javascript:
+      enable_syntax_validation: true
+      enable_formatting: false
+```
+
+### Natural Language Code Block Commands
+
+The natural language processor supports code block-specific commands:
+
+- "Enable Rust code formatting"
+- "Validate JavaScript syntax"
+- "Use 2-space indentation for JSON"
+- "Disable code block processing"
+
+### Additional Documentation
+
+For comprehensive information about the code block processing system:
+
+- **[Code Block Strategy API Documentation](CODE_BLOCK_STRATEGY_API.md)** - Complete API reference
+- **[Code Block Strategy Tutorial](CODE_BLOCK_STRATEGY_TUTORIAL.md)** - Step-by-step usage guide  
+- **[Plugin Development Guide](PLUGIN_DEVELOPMENT_GUIDE.md)** - How to create custom plugins
+- **[Code Block Configuration Guide](CODE_BLOCK_STRATEGY_CONFIG.md)** - Comprehensive configuration reference

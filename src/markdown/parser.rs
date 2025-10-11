@@ -2,12 +2,15 @@
 
 use crate::error::ConversionError;
 use crate::markdown::ast::{MarkdownDocument, MarkdownElement, InlineElement, ListItem};
+use crate::markdown::code_block::{CodeBlockProcessor, CodeBlockConfig};
 use pulldown_cmark::{Event, Parser, Tag, CodeBlockKind, HeadingLevel};
 
 /// Markdown parser that converts Markdown text to AST
 pub struct MarkdownParser {
     /// Parser options for pulldown-cmark
     options: pulldown_cmark::Options,
+    /// Code block processor for handling language-specific processing
+    code_block_processor: CodeBlockProcessor,
 }
 
 impl MarkdownParser {
@@ -19,12 +22,53 @@ impl MarkdownParser {
         options.insert(pulldown_cmark::Options::ENABLE_STRIKETHROUGH);
         options.insert(pulldown_cmark::Options::ENABLE_TASKLISTS);
         
-        Self { options }
+        Self { 
+            options,
+            code_block_processor: CodeBlockProcessor::new(),
+        }
     }
 
     /// Create a new Markdown parser with custom options
     pub fn with_options(options: pulldown_cmark::Options) -> Self {
-        Self { options }
+        Self { 
+            options,
+            code_block_processor: CodeBlockProcessor::new(),
+        }
+    }
+
+    /// Create a new Markdown parser with custom options and code block configuration
+    pub fn with_options_and_code_block_config(
+        options: pulldown_cmark::Options,
+        code_block_config: CodeBlockConfig,
+    ) -> Self {
+        Self {
+            options,
+            code_block_processor: CodeBlockProcessor::with_config(code_block_config),
+        }
+    }
+
+    /// Create a new Markdown parser with code block configuration
+    pub fn with_code_block_config(code_block_config: CodeBlockConfig) -> Self {
+        let mut options = pulldown_cmark::Options::empty();
+        options.insert(pulldown_cmark::Options::ENABLE_TABLES);
+        options.insert(pulldown_cmark::Options::ENABLE_FOOTNOTES);
+        options.insert(pulldown_cmark::Options::ENABLE_STRIKETHROUGH);
+        options.insert(pulldown_cmark::Options::ENABLE_TASKLISTS);
+        
+        Self {
+            options,
+            code_block_processor: CodeBlockProcessor::with_config(code_block_config),
+        }
+    }
+
+    /// Get the code block processor (for configuration and introspection)
+    pub fn get_code_block_processor(&self) -> &CodeBlockProcessor {
+        &self.code_block_processor
+    }
+
+    /// Update the code block configuration
+    pub fn update_code_block_config(&mut self, config: CodeBlockConfig) {
+        self.code_block_processor.update_config(config);
     }
 
     /// Parse Markdown string into document AST
@@ -69,7 +113,25 @@ impl MarkdownParser {
                     };
                     i += 1; // Skip start event
                     let code = self.collect_text_until_end(&events, &mut i, "CodeBlock")?;
-                    document.add_element(MarkdownElement::CodeBlock { language, code });
+                    
+                    // Process the code block using the strategy system
+                    let processed = match self.code_block_processor.process_code_block(
+                        &code,
+                        language.as_deref(),
+                    ) {
+                        Ok(processed_block) => Some(processed_block),
+                        Err(processing_error) => {
+                            // Log the error but continue with unprocessed code block
+                            tracing::warn!("Code block processing failed: {:?}", processing_error);
+                            None
+                        }
+                    };
+                    
+                    document.add_element(MarkdownElement::CodeBlock { 
+                        language, 
+                        code, 
+                        processed 
+                    });
                 },
                 Event::Start(Tag::List(first_item_number)) => {
                     let ordered = first_item_number.is_some();
@@ -552,10 +614,15 @@ mod tests {
         
         assert_eq!(result.elements.len(), 1);
         match &result.elements[0] {
-            MarkdownElement::CodeBlock { language, code } => {
+            MarkdownElement::CodeBlock { language, code, processed } => {
                 assert_eq!(language.as_ref().unwrap(), "rust");
                 assert!(code.contains("fn main()"));
                 assert!(code.contains("println!"));
+                // Now we expect the code block to be processed
+                assert!(processed.is_some());
+                let processed_block = processed.as_ref().unwrap();
+                assert_eq!(processed_block.original_code, *code);
+                assert_eq!(processed_block.language, *language);
             },
             _ => panic!("Expected code block element"),
         }
