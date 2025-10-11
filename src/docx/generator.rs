@@ -422,7 +422,7 @@ impl DocxGenerator {
 
         // Create table cell with code content using the helper method
         let cell = self
-            .create_code_block_cell(code, code_style)?
+            .create_code_block_cell_with_markdown(code, code_style)?
             .width(8300, WidthType::Dxa);
 
         // Create single-row, single-column table
@@ -711,6 +711,262 @@ impl DocxGenerator {
 
         docx = docx.add_paragraph(paragraph);
         Ok(docx)
+    }
+
+    /// Create a table cell with code content that may contain Markdown formatting
+    fn create_code_block_cell_with_markdown(
+        &self,
+        code: &str,
+        style: &crate::config::CodeBlockStyle,
+    ) -> Result<TableCell, ConversionError> {
+        // Check if the code contains Markdown formatting indicators
+        if self.contains_markdown_formatting(code) {
+            self.create_code_block_cell_with_parsed_markdown(code, style)
+        } else {
+            // Fall back to plain text rendering
+            self.create_code_block_cell(code, style)
+        }
+    }
+
+    /// Check if text contains common Markdown formatting
+    fn contains_markdown_formatting(&self, text: &str) -> bool {
+        text.contains("**") || // Bold
+        text.contains("*") ||  // Italic (but not ** which is already checked)
+        text.contains("![") || // Images
+        text.contains("[") ||  // Links
+        text.contains("`")     // Inline code
+    }
+
+    /// Create a table cell with parsed Markdown content
+    fn create_code_block_cell_with_parsed_markdown(
+        &self,
+        code: &str,
+        style: &crate::config::CodeBlockStyle,
+    ) -> Result<TableCell, ConversionError> {
+        
+        let mut cell = TableCell::new();
+
+        if style.preserve_line_breaks {
+            // Handle edge case: empty code block
+            if code.is_empty() {
+                let paragraph = self.create_code_paragraph("\u{00A0}", style)?; // Use non-breaking space for visibility
+                cell = cell.add_paragraph(paragraph);
+            } else {
+                // Trim trailing newlines to avoid extra empty lines at the end
+                let trimmed_code = code.trim_end_matches('\n');
+
+                // Split code by lines, preserving empty lines
+                let lines: Vec<&str> = trimmed_code.split('\n').collect();
+
+                for line in lines.iter() {
+                    // Convert tabs to spaces (4 spaces per tab) for consistent formatting
+                    let processed_line = line.replace('\t', "    ");
+
+                    // Handle empty lines by using a non-breaking space to preserve the line
+                    if processed_line.trim().is_empty() {
+                        let paragraph = self.create_code_paragraph("\u{00A0}", style)?;
+                        cell = cell.add_paragraph(paragraph);
+                    } else {
+                                        // Parse the line as Markdown and create paragraph with formatted runs
+                        let paragraph = self.create_code_paragraph_with_markdown(&processed_line, style)?;
+                        cell = cell.add_paragraph(paragraph);
+                    }
+                }
+            }
+        } else {
+            // Single paragraph for entire code block with tab conversion
+            // Trim trailing newlines to avoid extra empty lines
+            let trimmed_code = code.trim_end_matches('\n');
+            let processed_code = trimmed_code.replace('\t', "    ");
+            let paragraph = self.create_code_paragraph_with_markdown(&processed_code, style)?;
+            cell = cell.add_paragraph(paragraph);
+        }
+
+        // Apply background color to table cell if specified
+        if let Some(bg_color) = &style.background_color {
+            let color = bg_color.trim_start_matches('#');
+            // Apply cell shading/background color using docx-rs API
+            cell = cell.shading(Shading::new().fill(color));
+        }
+
+        Ok(cell)
+    }
+
+    /// Create a code paragraph with Markdown formatting
+    fn create_code_paragraph_with_markdown(
+        &self,
+        text: &str,
+        style: &crate::config::CodeBlockStyle,
+    ) -> Result<Paragraph, ConversionError> {
+        
+        // Parse the text as Markdown
+        let parser = crate::markdown::MarkdownParser::new();
+        let document = parser.parse(text).map_err(|e| {
+            ConversionError::DocxGeneration(format!("Failed to parse Markdown in code block: {}", e))
+        })?;
+
+        let mut paragraph = Paragraph::new().style("CodeBlock");
+
+        // Process the parsed elements
+        for element in &document.elements {
+            match element {
+                crate::markdown::MarkdownElement::Paragraph { content } => {
+                    // Add all inline elements from the paragraph
+                    for inline in content {
+                        let run = self.create_code_run_from_inline(inline, style)?;
+                        paragraph = paragraph.add_run(run);
+                    }
+                }
+                crate::markdown::MarkdownElement::Image { alt_text, url, title: _ } => {
+                    // Handle images in code blocks as placeholders
+                    let image_text = format!("[Image: {} - {}]", alt_text, url);
+                    let run = self.create_code_run(&image_text, style)?;
+                    paragraph = paragraph.add_run(run);
+                }
+                _ => {
+                    // For other elements, extract text and render as code
+                    let text_content = self.extract_text_from_element(element);
+                    if !text_content.is_empty() {
+                        let run = self.create_code_run(&text_content, style)?;
+                        paragraph = paragraph.add_run(run);
+                    }
+                }
+            }
+        }
+
+        // If no content was processed from Markdown, add the original text as fallback
+        // We'll track if we added any runs during processing
+        let mut has_content = false;
+        for element in &document.elements {
+            if !matches!(element, crate::markdown::MarkdownElement::Paragraph { content } if content.is_empty()) {
+                has_content = true;
+                break;
+            }
+        }
+        
+        if !has_content {
+            let run = self.create_code_run(text, style)?;
+            paragraph = paragraph.add_run(run);
+        }
+
+        // Apply line spacing configuration
+        let line_spacing_value = (style.line_spacing * 240.0) as i32;
+        paragraph = paragraph.line_spacing(LineSpacing::new().line(line_spacing_value));
+
+        Ok(paragraph)
+    }
+
+    /// Create a code run from an inline element with code styling
+    fn create_code_run_from_inline(
+        &self,
+        inline: &crate::markdown::InlineElement,
+        style: &crate::config::CodeBlockStyle,
+    ) -> Result<Run, ConversionError> {
+        let run = match inline {
+            crate::markdown::InlineElement::Text(text) => {
+                self.create_code_run(text, style)?
+            }
+            crate::markdown::InlineElement::Bold(text) => {
+                let mut run = self.create_code_run(text, style)?;
+                run = run.bold();
+                run
+            }
+            crate::markdown::InlineElement::Italic(text) => {
+                let mut run = self.create_code_run(text, style)?;
+                run = run.italic();
+                run
+            }
+            crate::markdown::InlineElement::Strikethrough(text) => {
+                let mut run = self.create_code_run(text, style)?;
+                run = run.strike();
+                run
+            }
+            crate::markdown::InlineElement::Code(text) => {
+                // Nested code - render with different background or styling
+                let mut run = self.create_code_run(text, style)?;
+                // Add a subtle highlight for nested code
+                run = run.highlight("E0E0E0");
+                run
+            }
+            crate::markdown::InlineElement::Link { text, url, title: _ } => {
+                let link_text = format!("{} ({})", text, url);
+                let mut run = self.create_code_run(&link_text, style)?;
+                run = run.color("0000FF"); // Blue color for links
+                run
+            }
+        };
+
+        Ok(run)
+    }
+
+    /// Create a basic code run with standard code styling
+    fn create_code_run(
+        &self,
+        text: &str,
+        style: &crate::config::CodeBlockStyle,
+    ) -> Result<Run, ConversionError> {
+        let mut run = Run::new()
+            .add_text(text)
+            .fonts(
+                RunFonts::new()
+                    .ascii(&style.font.family)
+                    .east_asia(&style.font.family),
+            )
+            .size((style.font.size * 2.0) as usize); // docx uses half-points
+
+        // Apply bold/italic conditionally based on font configuration
+        if style.font.bold {
+            run = run.bold();
+        }
+        if style.font.italic {
+            run = run.italic();
+        }
+
+        // Add background color if specified (applied to run for better compatibility)
+        if let Some(bg_color) = &style.background_color {
+            let color = bg_color.trim_start_matches('#');
+            run = run.highlight(color);
+        }
+
+        Ok(run)
+    }
+
+    /// Extract text content from a Markdown element
+    fn extract_text_from_element(&self, element: &crate::markdown::MarkdownElement) -> String {
+        match element {
+            crate::markdown::MarkdownElement::Heading { text, .. } => text.clone(),
+            crate::markdown::MarkdownElement::Paragraph { content } => {
+                content.iter().map(|inline| self.extract_text_from_inline(inline)).collect::<Vec<_>>().join("")
+            }
+            crate::markdown::MarkdownElement::CodeBlock { code, .. } => code.clone(),
+            crate::markdown::MarkdownElement::List { items, .. } => {
+                items.iter().map(|item| {
+                    item.content.iter().map(|inline| self.extract_text_from_inline(inline)).collect::<Vec<_>>().join("")
+                }).collect::<Vec<_>>().join(" ")
+            }
+            crate::markdown::MarkdownElement::Table { headers, rows } => {
+                let mut text = headers.join(" ");
+                for row in rows {
+                    text.push(' ');
+                    text.push_str(&row.join(" "));
+                }
+                text
+            }
+            crate::markdown::MarkdownElement::Image { alt_text, .. } => alt_text.clone(),
+            crate::markdown::MarkdownElement::HorizontalRule => "---".to_string(),
+        }
+    }
+
+    /// Extract text from an inline element
+    fn extract_text_from_inline(&self, inline: &crate::markdown::InlineElement) -> String {
+        match inline {
+            crate::markdown::InlineElement::Text(text) => text.clone(),
+            crate::markdown::InlineElement::Bold(text) => text.clone(),
+            crate::markdown::InlineElement::Italic(text) => text.clone(),
+            crate::markdown::InlineElement::Strikethrough(text) => text.clone(),
+            crate::markdown::InlineElement::Code(text) => text.clone(),
+            crate::markdown::InlineElement::Link { text, .. } => text.clone(),
+        }
     }
 
     /// Create a table cell with code content for table-based code block rendering
@@ -2242,6 +2498,126 @@ mod tests {
         let cell_result_whitespace =
             generator.create_code_block_cell(whitespace_code, &generator.config.styles.code_block);
         assert!(cell_result_whitespace.is_ok());
+    }
+
+    #[test]
+    fn test_code_block_with_markdown_formatting() {
+        let config = create_test_config();
+        let mut generator = DocxGenerator::new(config);
+
+        // Test code block with Markdown formatting
+        let markdown_code = "This is **bold** text and *italic* text.\nAlso `inline code` and [link](http://example.com).\n![image](image.jpg)";
+
+        let mut document = MarkdownDocument::new();
+        document.add_element(MarkdownElement::CodeBlock {
+            language: Some("markdown".to_string()),
+            code: markdown_code.to_string(),
+            processed: None,
+        });
+
+        let result = generator.generate(&document);
+        assert!(result.is_ok());
+
+        let docx_bytes = result.unwrap();
+        assert!(!docx_bytes.is_empty());
+    }
+
+    #[test]
+    fn test_contains_markdown_formatting() {
+        let config = create_test_config();
+        let generator = DocxGenerator::new(config);
+
+        // Test various Markdown patterns
+        assert!(generator.contains_markdown_formatting("**bold**"));
+        assert!(generator.contains_markdown_formatting("*italic*"));
+        assert!(generator.contains_markdown_formatting("`code`"));
+        assert!(generator.contains_markdown_formatting("[link](url)"));
+        assert!(generator.contains_markdown_formatting("![image](url)"));
+        
+        // Test plain text
+        assert!(!generator.contains_markdown_formatting("plain text"));
+        assert!(!generator.contains_markdown_formatting("no formatting here"));
+    }
+
+    #[test]
+    fn test_create_code_block_cell_with_markdown() {
+        let config = create_test_config();
+        let generator = DocxGenerator::new(config);
+
+        // Test with Markdown formatting
+        let markdown_text = "**Bold** and *italic* text";
+        let result = generator.create_code_block_cell_with_markdown(markdown_text, &generator.config.styles.code_block);
+        assert!(result.is_ok());
+
+        // Test with plain text (should fall back to regular method)
+        let plain_text = "plain text without formatting";
+        let result = generator.create_code_block_cell_with_markdown(plain_text, &generator.config.styles.code_block);
+        assert!(result.is_ok());
+
+        // Test with mixed content
+        let mixed_text = "Code: `function()` and **important** note";
+        let result = generator.create_code_block_cell_with_markdown(mixed_text, &generator.config.styles.code_block);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_create_code_run_from_inline() {
+        let config = create_test_config();
+        let generator = DocxGenerator::new(config);
+
+        // Test different inline elements
+        let bold_inline = InlineElement::Bold("bold text".to_string());
+        let result = generator.create_code_run_from_inline(&bold_inline, &generator.config.styles.code_block);
+        assert!(result.is_ok());
+
+        let italic_inline = InlineElement::Italic("italic text".to_string());
+        let result = generator.create_code_run_from_inline(&italic_inline, &generator.config.styles.code_block);
+        assert!(result.is_ok());
+
+        let code_inline = InlineElement::Code("nested code".to_string());
+        let result = generator.create_code_run_from_inline(&code_inline, &generator.config.styles.code_block);
+        assert!(result.is_ok());
+
+        let link_inline = InlineElement::Link {
+            text: "link text".to_string(),
+            url: "http://example.com".to_string(),
+            title: None,
+        };
+        let result = generator.create_code_run_from_inline(&link_inline, &generator.config.styles.code_block);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_extract_text_from_element() {
+        let config = create_test_config();
+        let generator = DocxGenerator::new(config);
+
+        // Test heading
+        let heading = MarkdownElement::Heading {
+            level: 1,
+            text: "Test Heading".to_string(),
+        };
+        let text = generator.extract_text_from_element(&heading);
+        assert_eq!(text, "Test Heading");
+
+        // Test paragraph
+        let paragraph = MarkdownElement::Paragraph {
+            content: vec![
+                InlineElement::Text("Hello ".to_string()),
+                InlineElement::Bold("world".to_string()),
+            ],
+        };
+        let text = generator.extract_text_from_element(&paragraph);
+        assert_eq!(text, "Hello world");
+
+        // Test image
+        let image = MarkdownElement::Image {
+            alt_text: "Test Image".to_string(),
+            url: "image.jpg".to_string(),
+            title: None,
+        };
+        let text = generator.extract_text_from_element(&image);
+        assert_eq!(text, "Test Image");
     }
 
     #[test]
