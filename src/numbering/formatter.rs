@@ -169,16 +169,17 @@ impl NumberingFormatter {
             return Err(NumberingError::parse_error("No levels specified"));
         }
         
-        // Check that levels start from 1 and are sequential
-        for (i, &level) in levels.iter().enumerate() {
-            let expected_level = (i + 1) as u8;
-            if level != expected_level {
-                return Err(NumberingError::invalid_format(
-                    format!("Levels must be sequential starting from 1. Expected %{}, found %{}", 
-                           expected_level, level)
-                ));
-            }
-        }
+        //  Commented for "%4." and "%5)"
+        // // Check that levels start from 1 and are sequential
+        // for (i, &level) in levels.iter().enumerate() {
+        //     let expected_level = (i + 1) as u8;
+        //     if level != expected_level {
+        //         return Err(NumberingError::invalid_format(
+        //             format!("Levels must be sequential starting from 1. Expected %{}, found %{}", 
+        //                    expected_level, level)
+        //         ));
+        //     }
+        // }
         
         Ok(())
     }
