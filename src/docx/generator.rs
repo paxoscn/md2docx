@@ -719,13 +719,13 @@ impl DocxGenerator {
         code: &str,
         style: &crate::config::CodeBlockStyle,
     ) -> Result<TableCell, ConversionError> {
-        // Check if the code contains Markdown formatting indicators
-        if self.contains_markdown_formatting(code) {
+        // // Check if the code contains Markdown formatting indicators
+        // if self.contains_markdown_formatting(code) {
             self.create_code_block_cell_with_parsed_markdown(code, style)
-        } else {
-            // Fall back to plain text rendering
-            self.create_code_block_cell(code, style)
-        }
+        // } else {
+        //     // Fall back to plain text rendering
+        //     self.create_code_block_cell(code, style)
+        // }
     }
 
     /// Check if text contains common Markdown formatting
@@ -767,7 +767,7 @@ impl DocxGenerator {
                         let paragraph = self.create_code_paragraph("\u{00A0}", style)?;
                         cell = cell.add_paragraph(paragraph);
                     } else {
-                                        // Parse the line as Markdown and create paragraph with formatted runs
+                        // Parse the line as Markdown and create paragraph with formatted runs
                         let paragraph = self.create_code_paragraph_with_markdown(&processed_line, style)?;
                         cell = cell.add_paragraph(paragraph);
                     }
@@ -798,14 +798,28 @@ impl DocxGenerator {
         text: &str,
         style: &crate::config::CodeBlockStyle,
     ) -> Result<Paragraph, ConversionError> {
+        let mut leading_spaces = String::new();
+        for ch in text.chars() {
+            if ch == ' ' {
+                leading_spaces.push(ch);
+            } else {
+                break;
+            }
+        }
+        let text_without_leading_spaces = &text[leading_spaces.len()..];
         
         // Parse the text as Markdown
         let parser = crate::markdown::MarkdownParser::new();
-        let document = parser.parse(text).map_err(|e| {
+        let document = parser.parse(text_without_leading_spaces).map_err(|e| {
             ConversionError::DocxGeneration(format!("Failed to parse Markdown in code block: {}", e))
         })?;
 
         let mut paragraph = Paragraph::new().style("CodeBlock");
+
+        if !leading_spaces.is_empty() {
+            let run = self.create_code_run(&leading_spaces, style)?;
+            paragraph = paragraph.add_run(run);
+        }
 
         // Process the parsed elements
         for element in &document.elements {
