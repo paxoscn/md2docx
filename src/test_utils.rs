@@ -119,6 +119,7 @@ pub fn create_test_config() -> ConversionConfig {
                 underline: true,
             },
         },
+        code_block_processing: None,
     }
 }
 

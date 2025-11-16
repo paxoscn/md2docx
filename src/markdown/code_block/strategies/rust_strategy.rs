@@ -70,21 +70,23 @@ impl RustStrategy {
     fn format_rust_code(&self, code: &str) -> Result<String, ProcessingError> {
         // For now, we'll do basic formatting by parsing and pretty-printing
         // In a production implementation, you would integrate with rustfmt
-        match syn::parse_file(code) {
+        
+        // Try to parse as a complete file first
+        let formatted = match syn::parse_file(code) {
             Ok(_syntax_tree) => {
-                // For now, just return the original code with basic cleanup
-                // In a real implementation, you would use rustfmt or syn's pretty printing
-                let formatted = code.trim().to_string();
-                // Apply keyword bold formatting
-                let formatted_with_bold = self.apply_keyword_bold(&formatted);
-                Ok(formatted_with_bold)
+                // Valid complete Rust file - use the original code with basic cleanup
+                code.trim().to_string()
             }
-            Err(e) => {
-                Err(ProcessingError::formatting_error(&format!(
-                    "Failed to format Rust code: {}", e
-                )))
+            Err(_) => {
+                // Not a complete file, might be a code snippet
+                // Still apply formatting to the snippet
+                code.trim().to_string()
             }
-        }
+        };
+        
+        // Always apply keyword bold formatting, regardless of syntax validity
+        let formatted_with_bold = self.apply_keyword_bold(&formatted);
+        Ok(formatted_with_bold)
     }
 
     /// Extract syntax errors from syn parsing
@@ -153,8 +155,8 @@ impl CodeBlockStrategy for RustStrategy {
             true // Assume valid if not validating
         };
         
-        // Format code if enabled and syntax is valid
-        let formatted_code = if config.enable_formatting && syntax_valid {
+        // Format code if enabled (apply keyword bold even if syntax is invalid)
+        let formatted_code = if config.enable_formatting {
             match self.format_rust_code(code) {
                 Ok(formatted) => Some(formatted),
                 Err(e) => {
@@ -320,8 +322,14 @@ fn main( {
         let strategy = RustStrategy::new();
         let invalid_code = r#"fn main( { invalid syntax"#;
         
+        // Even invalid code should be formatted (with keyword bold applied)
+        // We don't fail on syntax errors during formatting
         let result = strategy.format_code(invalid_code);
-        assert!(result.is_err());
+        assert!(result.is_ok());
+        
+        // Check that keywords are still bolded even in invalid code
+        let formatted = result.unwrap();
+        assert!(formatted.contains("**fn**"));
     }
 
     #[test]
