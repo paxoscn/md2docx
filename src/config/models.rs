@@ -36,6 +36,8 @@ pub struct ConversionConfig {
     pub document: DocumentConfig,
     pub styles: StyleConfig,
     pub elements: ElementConfig,
+    #[serde(default)]
+    pub code_block_processing: Option<crate::markdown::code_block::CodeBlockConfig>,
 }
 
 /// Document-level configuration
@@ -385,6 +387,7 @@ impl Default for ConversionConfig {
             document: DocumentConfig::default(),
             styles: StyleConfig::default(),
             elements: ElementConfig::default(),
+            code_block_processing: None,
         }
     }
 }

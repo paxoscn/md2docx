@@ -21,9 +21,18 @@ impl ConversionEngine {
         info!("Creating new conversion engine with config");
         debug!("Configuration: {:?}", config);
         
+        // Create markdown parser with code block processing config if available
+        let markdown_parser = if let Some(code_block_config) = &config.code_block_processing {
+            info!("Using code block processing configuration");
+            MarkdownParser::with_code_block_config(code_block_config.clone())
+        } else {
+            info!("Using default markdown parser (no code block processing config)");
+            MarkdownParser::new()
+        };
+        
         Self {
             config: config.clone(),
-            markdown_parser: MarkdownParser::new(),
+            markdown_parser,
             docx_generator: DocxGenerator::new(config),
         }
     }

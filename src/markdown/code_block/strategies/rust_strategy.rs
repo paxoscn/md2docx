@@ -16,6 +16,44 @@ impl RustStrategy {
         Self
     }
 
+    /// Get Rust keywords that should be rendered in bold
+    fn get_rust_keywords() -> &'static [&'static str] {
+        &[
+            // Keywords
+            "as", "break", "const", "continue", "crate", "else", "enum", "extern",
+            "false", "fn", "for", "if", "impl", "in", "let", "loop", "match", "mod",
+            "move", "mut", "pub", "ref", "return", "self", "Self", "static", "struct",
+            "super", "trait", "true", "type", "unsafe", "use", "where", "while",
+            // Async keywords
+            "async", "await",
+            // Reserved keywords
+            "abstract", "become", "box", "do", "final", "macro", "override", "priv",
+            "typeof", "unsized", "virtual", "yield",
+            // Common types
+            "i8", "i16", "i32", "i64", "i128", "isize",
+            "u8", "u16", "u32", "u64", "u128", "usize",
+            "f32", "f64", "bool", "char", "str",
+            "String", "Vec", "Option", "Result", "Box", "Rc", "Arc",
+        ]
+    }
+
+    /// Apply bold formatting to Rust keywords in code
+    fn apply_keyword_bold(&self, code: &str) -> String {
+        let keywords = Self::get_rust_keywords();
+        let mut result = code.to_string();
+        
+        for keyword in keywords {
+            // Use word boundaries to match whole words only
+            // Replace keyword with **keyword** for bold in markdown
+            let pattern = format!(r"\b{}\b", regex::escape(keyword));
+            let re = regex::Regex::new(&pattern).unwrap();
+            let replacement = format!("**{}**", keyword);
+            result = re.replace_all(&result, replacement.as_str()).to_string();
+        }
+        
+        result
+    }
+
     /// Validate Rust syntax using the syn crate
     fn validate_rust_syntax(&self, code: &str) -> Result<bool, ProcessingError> {
         match syn::parse_file(code) {
@@ -37,7 +75,9 @@ impl RustStrategy {
                 // For now, just return the original code with basic cleanup
                 // In a real implementation, you would use rustfmt or syn's pretty printing
                 let formatted = code.trim().to_string();
-                Ok(formatted)
+                // Apply keyword bold formatting
+                let formatted_with_bold = self.apply_keyword_bold(&formatted);
+                Ok(formatted_with_bold)
             }
             Err(e) => {
                 Err(ProcessingError::formatting_error(&format!(
@@ -269,7 +309,9 @@ fn main( {
         assert!(result.is_ok());
         
         let formatted = result.unwrap();
-        assert!(formatted.contains("fn main"));
+        // Keywords should be bolded
+        assert!(formatted.contains("**fn**"));
+        assert!(formatted.contains("main"));
         assert!(formatted.contains("println!"));
     }
 
@@ -420,5 +462,86 @@ fn some_function() -> Option<i32> {
         assert!(strategy.supports_language("rs"));
         assert!(strategy.supports_language("RS"));
         assert!(strategy.supports_language("Rs"));
+    }
+
+    #[test]
+    fn test_keyword_bold_formatting() {
+        let strategy = RustStrategy::new();
+        let code = r#"fn main() {
+    let x = 42;
+    if x > 0 {
+        println!("positive");
+    }
+}"#;
+        
+        let formatted = strategy.apply_keyword_bold(code);
+        
+        // Check that keywords are wrapped in **
+        assert!(formatted.contains("**fn**"));
+        assert!(formatted.contains("**let**"));
+        assert!(formatted.contains("**if**"));
+        
+        // Check that non-keywords are not affected
+        assert!(formatted.contains("main"));
+        assert!(!formatted.contains("**main**"));
+        assert!(formatted.contains("println!"));
+    }
+
+    #[test]
+    fn test_keyword_bold_with_types() {
+        let strategy = RustStrategy::new();
+        let code = "let x: i32 = 42;\nlet s: String = String::from(\"hello\");";
+        
+        let formatted = strategy.apply_keyword_bold(code);
+        
+        assert!(formatted.contains("**let**"));
+        assert!(formatted.contains("**i32**"));
+        assert!(formatted.contains("**String**"));
+    }
+
+    #[test]
+    fn test_keyword_bold_preserves_structure() {
+        let strategy = RustStrategy::new();
+        let code = "pub struct MyStruct {\n    pub field: bool,\n}";
+        
+        let formatted = strategy.apply_keyword_bold(code);
+        
+        assert!(formatted.contains("**pub**"));
+        assert!(formatted.contains("**struct**"));
+        assert!(formatted.contains("**bool**"));
+        assert!(formatted.contains("MyStruct")); // Non-keyword preserved
+    }
+
+    #[test]
+    fn test_format_code_includes_bold_keywords() {
+        let strategy = RustStrategy::new();
+        let code = "fn main() { let x = 42; }";
+        
+        let result = strategy.format_code(code);
+        assert!(result.is_ok());
+        
+        let formatted = result.unwrap();
+        assert!(formatted.contains("**fn**"));
+        assert!(formatted.contains("**let**"));
+    }
+
+    #[test]
+    fn test_process_with_formatting_includes_bold() {
+        let strategy = RustStrategy::new();
+        let config = ProcessingConfig::default()
+            .with_syntax_validation(true)
+            .with_formatting(true);
+        
+        let code = "fn main() { let x = 42; }";
+        
+        let result = strategy.process(code, &config);
+        assert!(result.is_ok());
+        
+        let processed = result.unwrap();
+        assert!(processed.processed_code.is_some());
+        
+        let formatted = processed.processed_code.unwrap();
+        assert!(formatted.contains("**fn**"));
+        assert!(formatted.contains("**let**"));
     }
 }
