@@ -614,6 +614,37 @@ impl DocxGenerator {
     ) -> Result<Docx, ConversionError> {
         let image_config = &self.config.elements.image;
 
+        // QR code
+        if alt_text == "qrcode" {
+            let center_style = Style::new("Center", StyleType::Paragraph)
+                .name("Center")
+                .align(AlignmentType::Center);
+            docx = docx.add_style(center_style);
+
+            // Try to embed local image
+            match self.embed_local_image_sized("/Users/lindagao/Workspace/md2docx/default-qrcode.png", alt_text, 50, 50, image_config) {
+                Ok(image_run) => {
+                    let paragraph = Paragraph::new().add_run(image_run);
+                    docx = docx.add_paragraph(paragraph.style("Center"));
+                }
+                Err(_) => {
+                    // Fallback to placeholder text if image can't be loaded
+                    let paragraph = Paragraph::new().add_run(
+                        Run::new()
+                            .add_text(&format!("[Image: {} - File not found: {}]", alt_text, url)),
+                    );
+                    docx = docx.add_paragraph(paragraph);
+                }
+            }
+
+            let paragraph = Paragraph::new().add_run(
+                Run::new().add_text(url.to_string()),
+            );
+            docx = docx.add_paragraph(paragraph.style("Center"));
+
+            return Ok(docx)
+        }
+
         // Check if it's a local file path
         if self.is_local_image_path(url) {
             // Try to embed local image
@@ -653,6 +684,24 @@ impl DocxGenerator {
         _alt_text: &str,
         image_config: &crate::config::ImageConfig,
     ) -> Result<Run, ConversionError> {
+        self.embed_local_image_sized(
+            path,
+            _alt_text,
+            image_config.max_width as u32,
+            image_config.max_height as u32,
+            image_config,
+        )
+    }
+
+    /// Embed a local image file
+    fn embed_local_image_sized(
+        &self,
+        path: &str,
+        _alt_text: &str,
+        width: u32,
+        height: u32,
+        image_config: &crate::config::ImageConfig,
+    ) -> Result<Run, ConversionError> {
         use std::fs;
         use std::path::Path;
 
@@ -673,9 +722,10 @@ impl DocxGenerator {
         let _format = self.get_image_format(path)?;
 
         // Create image with size constraints
+        // '9525' is from here: https://github.com/bokuweb/docx-rs/blob/main/docx-core/examples/image_floating.rs
         let image = Pic::new(&image_data).size(
-            image_config.max_width as u32,
-            image_config.max_height as u32,
+            width * 9525,
+            height * 9525,
         );
 
         // Create run with the image
