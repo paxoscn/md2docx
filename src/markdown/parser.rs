@@ -162,13 +162,26 @@ impl MarkdownParser {
     /// Collect text content until matching end tag
     fn collect_text_until_end(&self, events: &[Event], index: &mut usize, end_tag_name: &str) -> Result<String, ConversionError> {
         let mut text = String::new();
+        let mut nesting_level = 0;
         
         while *index < events.len() {
             match &events[*index] {
+                Event::Start(tag) => {
+                    // Track nested tags of the same type
+                    if self.tag_matches_name(tag, end_tag_name) {
+                        nesting_level += 1;
+                    }
+                },
                 Event::End(tag) => {
                     if self.tag_matches_name(tag, end_tag_name) {
-                        *index += 1;
-                        break;
+                        if nesting_level == 0 {
+                            // Found the matching end tag
+                            *index += 1;
+                            break;
+                        } else {
+                            // This is an end tag for a nested element
+                            nesting_level -= 1;
+                        }
                     }
                 },
                 Event::Text(t) => text.push_str(t),
@@ -1131,6 +1144,122 @@ mod tests {
                 assert!(!first_text.contains("  "));
             },
             _ => panic!("Expected paragraph element"),
+        }
+    }
+
+    #[test]
+    fn test_parse_bold_with_special_char_and_no_space() {
+        use pulldown_cmark::{Parser, Event};
+        
+        // Test the problematic case: **）** a **bbb**
+        let markdown = "**）** a **bbb**";
+        println!("\n=== Testing markdown: {} ===", markdown);
+        
+        // First, let's see what pulldown-cmark produces
+        let parser_raw = Parser::new(markdown);
+        let events: Vec<Event> = parser_raw.collect();
+        
+        println!("Events from pulldown-cmark:");
+        for (i, event) in events.iter().enumerate() {
+            println!("  {}: {:?}", i, event);
+        }
+        
+        // Now test our parser
+        let parser = MarkdownParser::new();
+        let result = parser.parse(markdown);
+        
+        match result {
+            Ok(doc) => {
+                println!("\nParsed successfully!");
+                println!("Elements: {}", doc.elements.len());
+                for (i, element) in doc.elements.iter().enumerate() {
+                    println!("  Element {}: {:?}", i, element);
+                }
+                
+                // Verify the structure
+                assert_eq!(doc.elements.len(), 1);
+                match &doc.elements[0] {
+                    MarkdownElement::Paragraph { content } => {
+                        println!("\nParagraph content:");
+                        for (i, inline) in content.iter().enumerate() {
+                            println!("  {}: {:?}", i, inline);
+                        }
+                        
+                        // Should have: Bold("）"), Text(" a "), Bold("bbb")
+                        assert!(content.len() >= 3, "Expected at least 3 inline elements, got {}", content.len());
+                    },
+                    _ => panic!("Expected paragraph element"),
+                }
+            },
+            Err(e) => {
+                panic!("Parser failed with error: {:?}", e);
+            }
+        }
+    }
+
+    #[test]
+    fn test_parse_multiple_bold_no_space_variations() {
+        let test_cases = vec![
+            "**）** a **bbb**",
+            "**）****bbb**",
+            "**a****b****c**",
+            "**（****）**",
+            "**）**a**bbb**",
+            "text **）** more **bbb** end",
+        ];
+        
+        for markdown in test_cases {
+            println!("\n=== Testing: {} ===", markdown);
+            let parser = MarkdownParser::new();
+            let result = parser.parse(markdown);
+            
+            match result {
+                Ok(doc) => {
+                    println!("✓ Parsed successfully");
+                    for element in &doc.elements {
+                        println!("  {:?}", element);
+                    }
+                },
+                Err(e) => {
+                    panic!("Failed to parse '{}': {:?}", markdown, e);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_nested_emphasis_and_strong() {
+        // Test various nesting scenarios
+        let test_cases = vec![
+            ("***text***", "triple asterisk"),
+            ("****text****", "quadruple asterisk"),
+            ("*italic **bold** italic*", "bold inside italic"),
+            ("**bold *italic* bold**", "italic inside bold"),
+        ];
+        
+        for (markdown, description) in test_cases {
+            println!("\n=== Testing {}: {} ===", description, markdown);
+            let parser = MarkdownParser::new();
+            let result = parser.parse(markdown);
+            
+            match result {
+                Ok(doc) => {
+                    println!("✓ Parsed successfully");
+                    assert_eq!(doc.elements.len(), 1);
+                    match &doc.elements[0] {
+                        MarkdownElement::Paragraph { content } => {
+                            println!("  Content elements: {}", content.len());
+                            for (i, elem) in content.iter().enumerate() {
+                                println!("    {}: {:?}", i, elem);
+                            }
+                        },
+                        _ => panic!("Expected paragraph"),
+                    }
+                },
+                Err(e) => {
+                    panic!("Failed to parse '{}': {:?}", markdown, e);
+                }
+            }
         }
     }
 }
