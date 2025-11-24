@@ -146,6 +146,10 @@ impl CodeBlockProcessor {
         // Register the Rust strategy
         use crate::markdown::code_block::strategies::RustStrategy;
         registry.register_strategy(std::sync::Arc::new(RustStrategy::new()));
+
+        // Register the Note strategy
+        use crate::markdown::code_block::strategies::NoteStrategy;
+        registry.register_strategy(std::sync::Arc::new(NoteStrategy::new()));
         
         // Future strategies to register:
         // - JavaScriptStrategy  

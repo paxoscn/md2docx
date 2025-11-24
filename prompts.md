@@ -6,3 +6,7 @@
 pub mod bajie;
 let y = 5;
 ```
+
+---
+
+为 code block 实现一个新的策略: 对 note 类型的 code block ,将第一行文字的字体放大加粗倾斜, 并在表格右上角插入一个小提示图片
