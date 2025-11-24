@@ -125,22 +125,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 这是一个重要的注意事项。
 ```
 
-输出（简化版）：
-```html
-<table style="...">
-  <tr>
-    <td>
-      <span style="font-size: 1.2em; font-weight: bold; font-style: italic;">
-        重要提示
-      </span>
-      这是一个重要的注意事项。
-    </td>
-    <td>
-      <img src="default-qrcode.png" alt="Tip" style="..." />
-    </td>
-  </tr>
-</table>
+输出（内部格式）：
 ```
+[NOTE_BLOCK_START]
+[TITLE]重要提示[/TITLE]
+[ICON]default-qrcode.png[/ICON]
+[CONTENT]
+这是一个重要的注意事项。
+[/CONTENT]
+[NOTE_BLOCK_END]
+```
+
+在 DOCX 中显示为：
+- 标题：**重要提示**（加粗、倾斜、放大）
+- 内容：这是一个重要的注意事项。
+- 图标：💡（右上角）
 
 ## 常见问题
 

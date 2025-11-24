@@ -89,23 +89,23 @@ if let Some(formatted) = result.processed_code {
 请仔细阅读。
 ```
 
-输出（HTML）：
-```html
-<table style="width: 100%; border: 1px solid #e0e0e0; border-radius: 8px; padding: 16px; background-color: #f8f9fa;">
-<tr>
-<td style="vertical-align: top;">
-
-<span style="font-size: 1.2em; font-weight: bold; font-style: italic;">重要提示</span>
-
+输出（内部格式）：
+```
+[NOTE_BLOCK_START]
+[TITLE]重要提示[/TITLE]
+[ICON]default-qrcode.png[/ICON]
+[CONTENT]
 这是一个需要注意的事项。
 请仔细阅读。
-</td>
-<td style="width: 48px; vertical-align: top; text-align: right;">
-<img src="default-qrcode.png" alt="Tip" style="width: 32px; height: 32px; opacity: 0.7;" />
-</td>
-</tr>
-</table>
+[/CONTENT]
+[NOTE_BLOCK_END]
 ```
+
+在 DOCX 中的渲染效果：
+- 第一行"重要提示"显示为：**加粗**、*倾斜*、1.2 倍字体大小（约 14pt）
+- 右上角显示一个小图标（💡 emoji 作为占位符）
+- 整体使用两列表格布局，带有边框和间距
+- 左列包含标题和内容，右列包含图标
 
 ## 配置选项
 
@@ -135,9 +135,9 @@ let config = ProcessingConfig::default()
 
 ## 注意事项
 
-1. **HTML 输出**：此策略生成 HTML 格式的输出，确保你的 Markdown 渲染器支持内联 HTML
-2. **图标路径**：确保图标文件路径正确，相对于最终 HTML 文档的位置
-3. **样式兼容性**：生成的 HTML 使用内联样式，在大多数环境中都能正常显示
+1. **DOCX 输出**：此策略生成特殊标记格式，由 DOCX 生成器解析并渲染为格式化的表格
+2. **图标显示**：当前版本使用 emoji 💡 作为图标占位符，未来版本将支持实际图片嵌入
+3. **格式化要求**：必须启用格式化（`with_formatting(true)`）才能生成特殊格式
 4. **第一行为空**：如果第一行为空，将被跳过，不会显示空的标题
 
 ## 测试

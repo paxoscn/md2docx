@@ -4,6 +4,7 @@ use crate::config::ConversionConfig;
 use crate::error::ConversionError;
 use crate::markdown::{InlineElement, ListItem, MarkdownDocument, MarkdownElement};
 use crate::numbering::HeadingProcessor;
+use crate::config::ImageConfig;
 use docx_rs::*;
 use std::io::Cursor;
 use std::str::FromStr;
@@ -411,6 +412,11 @@ impl DocxGenerator {
 
     /// Add a code block to the document as a single-row table
     fn add_code_block(&self, mut docx: Docx, code: &str) -> Result<Docx, ConversionError> {
+        // Check if this is a note block with special formatting
+        if code.contains("[NOTE_BLOCK_START]") && code.contains("[NOTE_BLOCK_END]") {
+            return self.add_note_block(docx, code);
+        }
+
         let code_style = &self.config.styles.code_block;
 
         // Add spacing before code block using empty paragraph
@@ -445,6 +451,134 @@ impl DocxGenerator {
         docx = docx.add_paragraph(spacing_after);
 
         Ok(docx)
+    }
+
+    /// Add a note block with special formatting (title, icon, content)
+    fn add_note_block(&self, mut docx: Docx, code: &str) -> Result<Docx, ConversionError> {
+        // Parse the note block markers
+        let title = self.extract_marker_content(code, "[TITLE]", "[/TITLE]");
+        let icon_path = self.extract_marker_content(code, "[ICON]", "[/ICON]");
+        let content = self.extract_marker_content(code, "[CONTENT]", "[/CONTENT]");
+
+        // Add spacing before note block
+        let spacing_before = Paragraph::new()
+            .add_run(Run::new().add_text("\u{00A0}"))
+            .size(1);
+        docx = docx.add_paragraph(spacing_before);
+
+        // Create the note block as a two-column table
+        // Left column: title + content
+        // Right column: icon (if available)
+
+        let mut left_cell = TableCell::new().clear_border(TableCellBorderPosition::Right);
+        
+        // Add title with special formatting (larger, bold, italic)
+        if let Some(title_text) = title {
+            let title_run = Run::new()
+                .add_text(&title_text)
+                .bold()
+                .italic()
+                .size(23); // 14pt * 2 = 28 half-points (1.2x of 12pt ≈ 14pt)
+            
+            let title_paragraph = Paragraph::new()
+                .add_run(title_run);
+            
+            left_cell = left_cell.add_paragraph(title_paragraph);
+            
+            // Add spacing after title
+            left_cell = left_cell.add_paragraph(Paragraph::new());
+        }
+        
+        // Add content
+        if let Some(content_text) = content {
+            for line in content_text.lines() {
+                if !line.trim().is_empty() {
+                    let content_run = Run::new().add_text(line);
+                    let content_paragraph = Paragraph::new().add_run(content_run);
+                    left_cell = left_cell.add_paragraph(content_paragraph);
+                } else {
+                    // Empty line
+                    left_cell = left_cell.add_paragraph(Paragraph::new());
+                }
+            }
+        }
+        
+        // Set cell width and styling
+        left_cell = left_cell
+            .width(6500, WidthType::Dxa)
+            .vertical_align(docx_rs::VAlignType::Top);
+
+        // Create right cell for icon
+        let mut right_cell = TableCell::new().clear_border(TableCellBorderPosition::Left);
+        
+        // Try to add icon if path is provided
+        if let Some(icon_path) = icon_path {
+            // // For now, we'll add a placeholder text instead of an actual image
+            // // In a full implementation, you would load and embed the image
+            // let icon_run = Run::new()
+            //     .add_text("💡") // Unicode lightbulb as placeholder
+            //     .size(32); // 16pt
+            
+            // let icon_paragraph = Paragraph::new()
+            //     .add_run(icon_run)
+            //     .align(docx_rs::AlignmentType::Right);
+            
+            // left_cell = left_cell.add_paragraph(icon_paragraph);
+
+            // Try to embed local image
+            let right_style = Style::new("Right", StyleType::Paragraph)
+                .name("Right")
+                .align(AlignmentType::Right);
+            docx = docx.add_style(right_style);
+
+            match self.embed_local_image_sized(icon_path.as_str(), "", 105, 70, &ImageConfig { max_width: 1500.0, max_height: 1000.0, }) {
+                Ok(image_run) => {
+                    let paragraph = Paragraph::new().add_run(image_run);
+                    right_cell = right_cell.add_paragraph(paragraph.style("Right"));
+                }
+                Err(e) => {
+                    warn!("embed_local_image_sized failed: {:?}", e);
+                }
+            }
+        }
+        
+        right_cell = right_cell
+            .width(1800, WidthType::Dxa)
+            .vertical_align(docx_rs::VAlignType::Top);
+
+        // Create table row with both cells
+        let row = TableRow::new(vec![left_cell, right_cell]);
+        // let row = TableRow::new(vec![left_cell]);
+        
+        // Create table with light background and border
+        let mut table = Table::new(vec![row])
+            .margins(TableCellMargins::new().margin(100, 100, 100, 100));
+        
+        // Apply light border
+        table = self.apply_table_borders(table, 1.0)?;
+        
+        // Add the table to the document
+        docx = docx.add_table(table);
+
+        // Add spacing after note block
+        let spacing_after = Paragraph::new()
+            .add_run(Run::new().add_text("\u{00A0}"))
+            .size(1);
+        docx = docx.add_paragraph(spacing_after);
+
+        Ok(docx)
+    }
+
+    /// Extract content between markers
+    fn extract_marker_content(&self, text: &str, start_marker: &str, end_marker: &str) -> Option<String> {
+        if let Some(start_pos) = text.find(start_marker) {
+            let content_start = start_pos + start_marker.len();
+            if let Some(end_pos) = text[content_start..].find(end_marker) {
+                let content = &text[content_start..content_start + end_pos];
+                return Some(content.trim().to_string());
+            }
+        }
+        None
     }
 
     /// Add a list to the document

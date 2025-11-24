@@ -64,11 +64,10 @@ fn test_note_strategy_processing_pipeline() {
     
     // Verify formatted output
     let formatted = result.processed_code.unwrap();
-    assert!(formatted.contains("<table"));
+    assert!(formatted.contains("[NOTE_BLOCK_START]"));
     assert!(formatted.contains("Important Notice"));
-    assert!(formatted.contains("font-weight: bold"));
-    assert!(formatted.contains("font-style: italic"));
-    assert!(formatted.contains("<img"));
+    assert!(formatted.contains("[TITLE]"));
+    assert!(formatted.contains("[ICON]"));
 }
 
 #[test]
@@ -145,7 +144,7 @@ fn test_note_strategy_single_line() {
     
     let formatted = result.processed_code.unwrap();
     assert!(formatted.contains("Single line note"));
-    assert!(formatted.contains("font-weight: bold"));
+    assert!(formatted.contains("[TITLE]"));
 }
 
 #[test]
@@ -159,11 +158,10 @@ fn test_note_strategy_multiline_content() {
     
     let formatted = result.processed_code.unwrap();
     
-    // First line should be styled
-    assert!(formatted.contains("Title"));
-    assert!(formatted.contains("font-weight: bold"));
+    // First line should be in title tags
+    assert!(formatted.contains("[TITLE]Title[/TITLE]"));
     
-    // Other lines should be present
+    // Other lines should be in content
     assert!(formatted.contains("Line 1"));
     assert!(formatted.contains("Line 2"));
     assert!(formatted.contains("Line 3"));

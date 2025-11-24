@@ -21,7 +21,7 @@ impl NoteStrategy {
     /// Create a new Note strategy instance with default icon path
     pub fn new() -> Self {
         Self {
-            tip_icon_path: "default-qrcode.png".to_string(),
+            tip_icon_path: "/Users/lindagao/Workspace/rust-book/img/note.png".to_string(),
         }
     }
 
@@ -33,6 +33,7 @@ impl NoteStrategy {
     }
 
     /// Process the note content by formatting the first line and adding icon
+    /// Returns a special marker format that DOCX generator can recognize
     fn format_note_content(&self, content: &str) -> Result<String, ProcessingError> {
         let lines: Vec<&str> = content.lines().collect();
         
@@ -42,38 +43,37 @@ impl NoteStrategy {
 
         let mut result = String::new();
         
-        // Create a table structure with the icon in the top-right corner
-        result.push_str("<table style=\"width: 100%; border: 1px solid #e0e0e0; border-radius: 8px; padding: 16px; background-color: #f8f9fa;\">\n");
-        result.push_str("<tr>\n");
-        result.push_str("<td style=\"vertical-align: top;\">\n\n");
+        // Use a special marker format that the DOCX generator can parse
+        // Format: [NOTE_BLOCK_START]
+        //         [TITLE]First line text[/TITLE]
+        //         [ICON]icon_path[/ICON]
+        //         [CONTENT]
+        //         Rest of content...
+        //         [/CONTENT]
+        //         [NOTE_BLOCK_END]
         
-        // Format the first line: bold, italic, and larger font
+        result.push_str("[NOTE_BLOCK_START]\n");
+        
+        // Format the first line as title
         let first_line = lines[0].trim();
         if !first_line.is_empty() {
-            result.push_str(&format!(
-                "<span style=\"font-size: 1.2em; font-weight: bold; font-style: italic;\">{}</span>\n\n",
-                first_line
-            ));
+            result.push_str(&format!("[TITLE]{}[/TITLE]\n", first_line));
         }
         
-        // Add remaining lines as normal text
-        for line in lines.iter().skip(1) {
-            result.push_str(line);
-            result.push('\n');
+        // Add icon path
+        result.push_str(&format!("[ICON]{}[/ICON]\n", self.tip_icon_path));
+        
+        // Add remaining lines as content
+        if lines.len() > 1 {
+            result.push_str("[CONTENT]\n");
+            for line in lines.iter().skip(1) {
+                result.push_str(line);
+                result.push('\n');
+            }
+            result.push_str("[/CONTENT]\n");
         }
         
-        result.push_str("</td>\n");
-        
-        // Add the tip icon in the top-right corner
-        result.push_str("<td style=\"width: 48px; vertical-align: top; text-align: right;\">\n");
-        result.push_str(&format!(
-            "<img src=\"{}\" alt=\"Tip\" style=\"width: 32px; height: 32px; opacity: 0.7;\" />\n",
-            self.tip_icon_path
-        ));
-        result.push_str("</td>\n");
-        
-        result.push_str("</tr>\n");
-        result.push_str("</table>\n");
+        result.push_str("[NOTE_BLOCK_END]\n");
         
         Ok(result)
     }
@@ -187,16 +187,16 @@ mod tests {
         assert!(result.is_ok());
         
         let formatted = result.unwrap();
-        // Check that it contains HTML table structure
-        assert!(formatted.contains("<table"));
-        assert!(formatted.contains("</table>"));
-        // Check that first line is styled
-        assert!(formatted.contains("font-weight: bold"));
-        assert!(formatted.contains("font-style: italic"));
-        assert!(formatted.contains("font-size: 1.2em"));
-        // Check that icon is included
-        assert!(formatted.contains("<img"));
-        assert!(formatted.contains("default-qrcode.png"));
+        // Check that it contains special markers
+        assert!(formatted.contains("[NOTE_BLOCK_START]"));
+        assert!(formatted.contains("[NOTE_BLOCK_END]"));
+        // Check that first line is in title tags
+        assert!(formatted.contains("[TITLE]Important Note[/TITLE]"));
+        // Check that icon path is included
+        assert!(formatted.contains("[ICON]default-qrcode.png[/ICON]"));
+        // Check that content is included
+        assert!(formatted.contains("[CONTENT]"));
+        assert!(formatted.contains("This is the body of the note."));
     }
 
     #[test]
@@ -218,7 +218,7 @@ mod tests {
         
         let formatted = processed.processed_code.unwrap();
         assert!(formatted.contains("Pro Tip"));
-        assert!(formatted.contains("font-weight: bold"));
+        assert!(formatted.contains("[TITLE]"));
     }
 
     #[test]
@@ -254,7 +254,7 @@ mod tests {
         
         let formatted = result.unwrap();
         assert!(formatted.contains("Single line note"));
-        assert!(formatted.contains("font-weight: bold"));
+        assert!(formatted.contains("[TITLE]"));
     }
 
     #[test]
@@ -306,17 +306,15 @@ mod tests {
         
         let formatted = result.unwrap();
         
-        // Verify table structure
-        assert!(formatted.contains("<table"));
-        assert!(formatted.contains("<tr>"));
-        assert!(formatted.contains("<td"));
-        assert!(formatted.contains("</td>"));
-        assert!(formatted.contains("</tr>"));
-        assert!(formatted.contains("</table>"));
-        
-        // Verify styling
-        assert!(formatted.contains("border-radius"));
-        assert!(formatted.contains("background-color"));
+        // Verify marker structure
+        assert!(formatted.contains("[NOTE_BLOCK_START]"));
+        assert!(formatted.contains("[NOTE_BLOCK_END]"));
+        assert!(formatted.contains("[TITLE]"));
+        assert!(formatted.contains("[/TITLE]"));
+        assert!(formatted.contains("[ICON]"));
+        assert!(formatted.contains("[/ICON]"));
+        assert!(formatted.contains("[CONTENT]"));
+        assert!(formatted.contains("[/CONTENT]"));
         
         // Verify content
         assert!(formatted.contains("Title Line"));
