@@ -15,6 +15,8 @@ use tracing::{debug, error, info, trace, warn};
 pub struct DocxGenerator {
     config: ConversionConfig,
     heading_processor: Option<HeadingProcessor>,
+    /// Track if we've encountered the first H1 heading to avoid page break before it
+    first_h1_encountered: bool,
 }
 
 impl DocxGenerator {
@@ -52,6 +54,7 @@ impl DocxGenerator {
         Self {
             config,
             heading_processor,
+            first_h1_encountered: false,
         }
     }
 
@@ -62,7 +65,9 @@ impl DocxGenerator {
         // Apply document-level settings
         docx = self.apply_document_settings(docx)?;
 
-        // Reset numbering state at the beginning of document generation
+        // Reset state at the beginning of document generation
+        self.first_h1_encountered = false;
+        
         if let Some(ref mut processor) = self.heading_processor {
             info!("Resetting numbering state for new document generation");
             processor.reset_state();
@@ -229,6 +234,18 @@ impl DocxGenerator {
             );
             text.to_string()
         };
+
+        // For level 1 headings, add a page break before the heading (except for the first H1)
+        if level == 1 {
+            if self.first_h1_encountered {
+                // Add page break for subsequent H1 headings
+                let page_break = Paragraph::new().add_run(Run::new().add_break(BreakType::Page));
+                docx = docx.add_paragraph(page_break);
+            } else {
+                // Mark that we've encountered the first H1
+                self.first_h1_encountered = true;
+            }
+        }
 
         let mut run = Run::new()
             .add_text(&processed_text)
