@@ -305,6 +305,92 @@ impl DocxGenerator {
         Ok(docx)
     }
 
+    // /// Add a paragraph to the document
+    // fn add_paragraph(
+    //     &self,
+    //     mut docx: Docx,
+    //     content: &[InlineElement],
+    // ) -> Result<Docx, ConversionError> {
+    //     // Check if content contains hard breaks (newlines from <br /> tags)
+    //     let has_hard_breaks = content.iter().any(|inline| {
+    //         matches!(inline, InlineElement::Text(text) if text.contains('\n'))
+    //     });
+
+    //     if has_hard_breaks {
+    //         // Split content by hard breaks and create separate paragraphs
+    //         let mut current_paragraph_content = Vec::new();
+            
+    //         for inline in content {
+    //             match inline {
+    //                 InlineElement::Text(text) => {
+    //                     // Split text by newlines
+    //                     let parts: Vec<&str> = text.split('\n').collect();
+                        
+    //                     for (i, part) in parts.iter().enumerate() {
+    //                         if i > 0 {
+    //                             // Add the accumulated content as a paragraph
+    //                             if !current_paragraph_content.is_empty() {
+    //                                 docx = self.add_single_paragraph(docx, &current_paragraph_content)?;
+    //                                 current_paragraph_content.clear();
+    //                             }
+                                
+    //                             // Add an empty paragraph for the line break
+    //                             docx = self.add_empty_paragraph(docx)?;
+    //                         }
+                            
+    //                         // Add the text part if it's not empty
+    //                         if !part.is_empty() {
+    //                             current_paragraph_content.push(InlineElement::Text(part.to_string()));
+    //                         }
+    //                     }
+    //                 }
+    //                 other => {
+    //                     // Add non-text elements directly
+    //                     current_paragraph_content.push(other.clone());
+    //                 }
+    //             }
+    //         }
+            
+    //         // Add any remaining content
+    //         if !current_paragraph_content.is_empty() {
+    //             docx = self.add_single_paragraph(docx, &current_paragraph_content)?;
+    //         }
+    //     } else {
+    //         // No hard breaks, add as a single paragraph
+    //         docx = self.add_single_paragraph(docx, content)?;
+    //     }
+        
+    //     Ok(docx)
+    // }
+
+    /// Add a single paragraph without processing hard breaks
+    fn add_single_paragraph(
+        &self,
+        mut docx: Docx,
+        content: &[InlineElement],
+    ) -> Result<Docx, ConversionError> {
+        let mut paragraph =
+            Paragraph::new().indent(None, Some(SpecialIndentType::FirstLine(315)), None, None);
+
+        for inline in content {
+            let run = self.create_run_from_inline(inline)?;
+            paragraph = paragraph.add_run(run);
+        }
+
+        docx = docx.add_paragraph(paragraph);
+        Ok(docx)
+    }
+
+    /// Add an empty paragraph (for line breaks)
+    fn add_empty_paragraph(&self, mut docx: Docx) -> Result<Docx, ConversionError> {
+        let paragraph = Paragraph::new()
+            .add_run(Run::new().add_text("\u{00A0}")) // Non-breaking space
+            .size(1); // Small font size
+        
+        docx = docx.add_paragraph(paragraph);
+        Ok(docx)
+    }
+
     /// Create a run from an inline element
     fn create_run_from_inline(&self, inline: &InlineElement) -> Result<Run, ConversionError> {
         let base_font = &self.config.styles.paragraph.font;
@@ -555,7 +641,7 @@ impl DocxGenerator {
             .margins(TableCellMargins::new().margin(100, 100, 100, 100));
         
         // Apply light border
-        table = self.apply_table_borders(table, 1.0)?;
+        table = self.apply_table_borders_with_type(table, 1.0, BorderType::Dashed)?;
         
         // Add the table to the document
         docx = docx.add_table(table);
@@ -1227,11 +1313,11 @@ impl DocxGenerator {
         Ok(cell)
     }
 
-    /// Apply border styling to table based on border_width configuration
-    fn apply_table_borders(
+    fn apply_table_borders_with_type(
         &self,
         table: Table,
         border_width: f32,
+        border_type: BorderType,
     ) -> Result<Table, ConversionError> {
         if border_width <= 0.0 {
             // No borders when border_width is 0 or negative
@@ -1246,37 +1332,37 @@ impl DocxGenerator {
         let table_borders = TableBorders::new()
             .set(
                 TableBorder::new(TableBorderPosition::Top)
-                    .border_type(BorderType::Single)
+                    .border_type(border_type)
                     .size(border_size)
                     .color("000000"),
             )
             .set(
                 TableBorder::new(TableBorderPosition::Bottom)
-                    .border_type(BorderType::Single)
+                    .border_type(border_type)
                     .size(border_size)
                     .color("000000"),
             )
             .set(
                 TableBorder::new(TableBorderPosition::Left)
-                    .border_type(BorderType::Single)
+                    .border_type(border_type)
                     .size(border_size)
                     .color("000000"),
             )
             .set(
                 TableBorder::new(TableBorderPosition::Right)
-                    .border_type(BorderType::Single)
+                    .border_type(border_type)
                     .size(border_size)
                     .color("000000"),
             )
             .set(
                 TableBorder::new(TableBorderPosition::InsideH)
-                    .border_type(BorderType::Single)
+                    .border_type(border_type)
                     .size(border_size)
                     .color("000000"),
             )
             .set(
                 TableBorder::new(TableBorderPosition::InsideV)
-                    .border_type(BorderType::Single)
+                    .border_type(border_type)
                     .size(border_size)
                     .color("000000"),
             );
@@ -1284,6 +1370,15 @@ impl DocxGenerator {
         let bordered_table = table.set_borders(table_borders);
 
         Ok(bordered_table)
+    }
+
+    /// Apply border styling to table based on border_width configuration
+    fn apply_table_borders(
+        &self,
+        table: Table,
+        border_width: f32,
+    ) -> Result<Table, ConversionError> {
+        self.apply_table_borders_with_type(table, border_width, BorderType::Single)
     }
 
     /// Create a consistent code paragraph with proper styling for use within table cells
@@ -2973,6 +3068,90 @@ mod tests {
             rows: vec![
                 vec!["Item 1".to_string(), "Short description".to_string()],
                 vec!["Item 2".to_string(), "This is a much longer description that should affect the column width".to_string()],
+            ],
+        });
+
+        let result = generator.generate(&document);
+        assert!(result.is_ok());
+
+        let docx_bytes = result.unwrap();
+        assert!(!docx_bytes.is_empty());
+    }
+
+    #[test]
+    fn test_paragraph_with_hard_breaks() {
+        let config = create_test_config();
+        let mut generator = DocxGenerator::new(config);
+
+        // Test paragraph with hard breaks (from <br /> tags)
+        let mut document = MarkdownDocument::new();
+        document.add_element(MarkdownElement::Paragraph {
+            content: vec![
+                InlineElement::Text("First line\nSecond line\nThird line".to_string()),
+            ],
+        });
+
+        let result = generator.generate(&document);
+        assert!(result.is_ok());
+
+        let docx_bytes = result.unwrap();
+        assert!(!docx_bytes.is_empty());
+    }
+
+    #[test]
+    fn test_paragraph_with_hard_breaks_and_formatting() {
+        let config = create_test_config();
+        let mut generator = DocxGenerator::new(config);
+
+        // Test paragraph with hard breaks and formatting
+        let mut document = MarkdownDocument::new();
+        document.add_element(MarkdownElement::Paragraph {
+            content: vec![
+                InlineElement::Text("First line with ".to_string()),
+                InlineElement::Bold("bold".to_string()),
+                InlineElement::Text("\nSecond line with ".to_string()),
+                InlineElement::Italic("italic".to_string()),
+                InlineElement::Text("\nThird line".to_string()),
+            ],
+        });
+
+        let result = generator.generate(&document);
+        assert!(result.is_ok());
+
+        let docx_bytes = result.unwrap();
+        assert!(!docx_bytes.is_empty());
+    }
+
+    #[test]
+    fn test_paragraph_with_multiple_consecutive_hard_breaks() {
+        let config = create_test_config();
+        let mut generator = DocxGenerator::new(config);
+
+        // Test paragraph with multiple consecutive hard breaks
+        let mut document = MarkdownDocument::new();
+        document.add_element(MarkdownElement::Paragraph {
+            content: vec![
+                InlineElement::Text("First line\n\nThird line (with empty line in between)".to_string()),
+            ],
+        });
+
+        let result = generator.generate(&document);
+        assert!(result.is_ok());
+
+        let docx_bytes = result.unwrap();
+        assert!(!docx_bytes.is_empty());
+    }
+
+    #[test]
+    fn test_paragraph_without_hard_breaks() {
+        let config = create_test_config();
+        let mut generator = DocxGenerator::new(config);
+
+        // Test normal paragraph without hard breaks
+        let mut document = MarkdownDocument::new();
+        document.add_element(MarkdownElement::Paragraph {
+            content: vec![
+                InlineElement::Text("This is a normal paragraph without any hard breaks.".to_string()),
             ],
         });
 
