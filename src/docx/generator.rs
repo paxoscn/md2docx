@@ -1207,43 +1207,60 @@ impl DocxGenerator {
         elements
     }
 
-    /// Parse inline formatting including [BOLD] tags
+    /// Parse inline formatting including [BOLD] and [ITALIC] tags
     fn parse_inline_formatting_with_tags(&self, text: &str) -> Vec<crate::markdown::InlineElement> {
         let mut elements = Vec::new();
         let mut current_pos = 0;
         
         while current_pos < text.len() {
-            // Look for [BOLD] tag
-            if let Some(bold_start) = text[current_pos..].find("[BOLD]") {
-                let absolute_bold_start = current_pos + bold_start;
+            // Look for the next formatting tag (either [BOLD] or [ITALIC])
+            let bold_pos = text[current_pos..].find("[BOLD]").map(|p| (p, "[BOLD]", "[/BOLD]", true));
+            let italic_pos = text[current_pos..].find("[ITALIC]").map(|p| (p, "[ITALIC]", "[/ITALIC]", false));
+            
+            // Determine which tag comes first
+            let next_tag = match (bold_pos, italic_pos) {
+                (Some((bp, _, _, _)), Some((ip, _, _, _))) => {
+                    if bp < ip { bold_pos } else { italic_pos }
+                }
+                (Some(_), None) => bold_pos,
+                (None, Some(_)) => italic_pos,
+                (None, None) => None,
+            };
+            
+            if let Some((tag_start, open_tag, close_tag, is_bold)) = next_tag {
+                let absolute_tag_start = current_pos + tag_start;
                 
-                // Add text before [BOLD] tag
-                if bold_start > 0 {
+                // Add text before tag
+                if tag_start > 0 {
                     elements.push(crate::markdown::InlineElement::Text(
-                        text[current_pos..absolute_bold_start].to_string()
+                        text[current_pos..absolute_tag_start].to_string()
                     ));
                 }
                 
-                // Look for [/BOLD] tag
-                let search_start = absolute_bold_start + 6; // length of "[BOLD]"
-                if let Some(bold_end) = text[search_start..].find("[/BOLD]") {
-                    let absolute_bold_end = search_start + bold_end;
+                // Look for closing tag
+                let search_start = absolute_tag_start + open_tag.len();
+                if let Some(tag_end) = text[search_start..].find(close_tag) {
+                    let absolute_tag_end = search_start + tag_end;
                     
-                    // Extract bold content
-                    let bold_content = &text[search_start..absolute_bold_end];
-                    elements.push(crate::markdown::InlineElement::Bold(bold_content.to_string()));
+                    // Extract formatted content
+                    let content = &text[search_start..absolute_tag_end];
+                    if is_bold {
+                        elements.push(crate::markdown::InlineElement::Bold(content.to_string()));
+                    } else {
+                        elements.push(crate::markdown::InlineElement::Italic(content.to_string()));
+                    }
                     
-                    // Move position past [/BOLD]
-                    current_pos = absolute_bold_end + 7; // length of "[/BOLD]"
+                    // Move position past closing tag
+                    current_pos = absolute_tag_end + close_tag.len();
                 } else {
-                    // No closing tag found, treat [BOLD] as literal text
+                    // No closing tag found, treat opening tag as literal text
                     elements.push(crate::markdown::InlineElement::Text(
-                        text[absolute_bold_start..absolute_bold_start + 6].to_string()
+                        text[absolute_tag_start..absolute_tag_start + open_tag.len()].to_string()
                     ));
-                    current_pos = absolute_bold_start + 6;
+                    current_pos = absolute_tag_start + open_tag.len();
                 }
             } else {
-                // No more [BOLD] tags, add remaining text
+                // No more tags, add remaining text
                 if current_pos < text.len() {
                     elements.push(crate::markdown::InlineElement::Text(
                         text[current_pos..].to_string()
@@ -3023,6 +3040,78 @@ mod tests {
         match &elements[2] {
             crate::markdown::InlineElement::Text(t) => assert_eq!(t, "unclosed bold"),
             _ => panic!("Expected Text element"),
+        }
+    }
+
+    #[test]
+    fn test_parse_inline_formatting_with_italic_tags() {
+        let config = create_test_config();
+        let generator = DocxGenerator::new(config);
+
+        // Test single [ITALIC] tag
+        let text = "This is [ITALIC]italic[/ITALIC] text";
+        let elements = generator.parse_inline_formatting_with_tags(text);
+        
+        assert_eq!(elements.len(), 3);
+        match &elements[0] {
+            crate::markdown::InlineElement::Text(t) => assert_eq!(t, "This is "),
+            _ => panic!("Expected Text element"),
+        }
+        match &elements[1] {
+            crate::markdown::InlineElement::Italic(t) => assert_eq!(t, "italic"),
+            _ => panic!("Expected Italic element"),
+        }
+        match &elements[2] {
+            crate::markdown::InlineElement::Text(t) => assert_eq!(t, " text"),
+            _ => panic!("Expected Text element"),
+        }
+    }
+
+    #[test]
+    fn test_parse_inline_formatting_with_mixed_tags() {
+        let config = create_test_config();
+        let generator = DocxGenerator::new(config);
+
+        // Test mixed [BOLD] and [ITALIC] tags
+        let text = "[BOLD]bold[/BOLD] and [ITALIC]italic[/ITALIC]";
+        let elements = generator.parse_inline_formatting_with_tags(text);
+        
+        assert_eq!(elements.len(), 3);
+        match &elements[0] {
+            crate::markdown::InlineElement::Bold(t) => assert_eq!(t, "bold"),
+            _ => panic!("Expected Bold element"),
+        }
+        match &elements[1] {
+            crate::markdown::InlineElement::Text(t) => assert_eq!(t, " and "),
+            _ => panic!("Expected Text element"),
+        }
+        match &elements[2] {
+            crate::markdown::InlineElement::Italic(t) => assert_eq!(t, "italic"),
+            _ => panic!("Expected Italic element"),
+        }
+    }
+
+    #[test]
+    fn test_parse_inline_formatting_with_nested_order() {
+        let config = create_test_config();
+        let generator = DocxGenerator::new(config);
+
+        // Test that tags are processed in order of appearance
+        let text = "[ITALIC]first[/ITALIC] then [BOLD]second[/BOLD]";
+        let elements = generator.parse_inline_formatting_with_tags(text);
+        
+        assert_eq!(elements.len(), 3);
+        match &elements[0] {
+            crate::markdown::InlineElement::Italic(t) => assert_eq!(t, "first"),
+            _ => panic!("Expected Italic element"),
+        }
+        match &elements[1] {
+            crate::markdown::InlineElement::Text(t) => assert_eq!(t, " then "),
+            _ => panic!("Expected Text element"),
+        }
+        match &elements[2] {
+            crate::markdown::InlineElement::Bold(t) => assert_eq!(t, "second"),
+            _ => panic!("Expected Bold element"),
         }
     }
 

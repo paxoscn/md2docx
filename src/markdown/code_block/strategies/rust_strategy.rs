@@ -54,6 +54,34 @@ impl RustStrategy {
         result
     }
 
+    /// Apply italic formatting to Rust comments
+    fn apply_comment_italic(&self, code: &str) -> String {
+        let mut result = String::new();
+        
+        for line in code.lines() {
+            // Check if line contains a comment
+            if let Some(comment_pos) = line.find("//") {
+                // Add the code part before the comment
+                result.push_str(&line[..comment_pos]);
+                // Add the comment with italic formatting
+                result.push_str("[ITALIC]");
+                result.push_str(&line[comment_pos..]);
+                result.push_str("[/ITALIC]");
+            } else {
+                // No comment, add line as-is
+                result.push_str(line);
+            }
+            result.push('\n');
+        }
+        
+        // Remove trailing newline if original didn't have one
+        if !code.ends_with('\n') && result.ends_with('\n') {
+            result.pop();
+        }
+        
+        result
+    }
+
     /// Validate Rust syntax using the syn crate
     fn validate_rust_syntax(&self, code: &str) -> Result<bool, ProcessingError> {
         match syn::parse_file(code) {
@@ -84,8 +112,11 @@ impl RustStrategy {
             }
         };
         
-        // Always apply keyword bold formatting, regardless of syntax validity
-        let formatted_with_bold = self.apply_keyword_bold(&formatted);
+        // Apply comment italic formatting first (before bold, to avoid conflicts)
+        let formatted_with_italic = self.apply_comment_italic(&formatted);
+        
+        // Then apply keyword bold formatting
+        let formatted_with_bold = self.apply_keyword_bold(&formatted_with_italic);
         Ok(formatted_with_bold)
     }
 
@@ -311,8 +342,8 @@ fn main( {
         assert!(result.is_ok());
         
         let formatted = result.unwrap();
-        // Keywords should be bolded
-        assert!(formatted.contains("**fn**"));
+        // Keywords should be bolded with [BOLD] tags
+        assert!(formatted.contains("[BOLD]fn[/BOLD]"));
         assert!(formatted.contains("main"));
         assert!(formatted.contains("println!"));
     }
@@ -329,7 +360,7 @@ fn main( {
         
         // Check that keywords are still bolded even in invalid code
         let formatted = result.unwrap();
-        assert!(formatted.contains("**fn**"));
+        assert!(formatted.contains("[BOLD]fn[/BOLD]"));
     }
 
     #[test]
@@ -484,14 +515,14 @@ fn some_function() -> Option<i32> {
         
         let formatted = strategy.apply_keyword_bold(code);
         
-        // Check that keywords are wrapped in **
-        assert!(formatted.contains("**fn**"));
-        assert!(formatted.contains("**let**"));
-        assert!(formatted.contains("**if**"));
+        // Check that keywords are wrapped in [BOLD] tags
+        assert!(formatted.contains("[BOLD]fn[/BOLD]"));
+        assert!(formatted.contains("[BOLD]let[/BOLD]"));
+        assert!(formatted.contains("[BOLD]if[/BOLD]"));
         
         // Check that non-keywords are not affected
         assert!(formatted.contains("main"));
-        assert!(!formatted.contains("**main**"));
+        assert!(!formatted.contains("[BOLD]main[/BOLD]"));
         assert!(formatted.contains("println!"));
     }
 
@@ -502,9 +533,9 @@ fn some_function() -> Option<i32> {
         
         let formatted = strategy.apply_keyword_bold(code);
         
-        assert!(formatted.contains("**let**"));
-        assert!(formatted.contains("**i32**"));
-        assert!(formatted.contains("**String**"));
+        assert!(formatted.contains("[BOLD]let[/BOLD]"));
+        assert!(formatted.contains("[BOLD]i32[/BOLD]"));
+        assert!(formatted.contains("[BOLD]String[/BOLD]"));
     }
 
     #[test]
@@ -514,9 +545,9 @@ fn some_function() -> Option<i32> {
         
         let formatted = strategy.apply_keyword_bold(code);
         
-        assert!(formatted.contains("**pub**"));
-        assert!(formatted.contains("**struct**"));
-        assert!(formatted.contains("**bool**"));
+        assert!(formatted.contains("[BOLD]pub[/BOLD]"));
+        assert!(formatted.contains("[BOLD]struct[/BOLD]"));
+        assert!(formatted.contains("[BOLD]bool[/BOLD]"));
         assert!(formatted.contains("MyStruct")); // Non-keyword preserved
     }
 
@@ -529,8 +560,8 @@ fn some_function() -> Option<i32> {
         assert!(result.is_ok());
         
         let formatted = result.unwrap();
-        assert!(formatted.contains("**fn**"));
-        assert!(formatted.contains("**let**"));
+        assert!(formatted.contains("[BOLD]fn[/BOLD]"));
+        assert!(formatted.contains("[BOLD]let[/BOLD]"));
     }
 
     #[test]
@@ -549,7 +580,72 @@ fn some_function() -> Option<i32> {
         assert!(processed.processed_code.is_some());
         
         let formatted = processed.processed_code.unwrap();
-        assert!(formatted.contains("**fn**"));
-        assert!(formatted.contains("**let**"));
+        assert!(formatted.contains("[BOLD]fn[/BOLD]"));
+        assert!(formatted.contains("[BOLD]let[/BOLD]"));
+    }
+
+    #[test]
+    fn test_comment_italic_formatting() {
+        let strategy = RustStrategy::new();
+        let code = r#"fn main() {
+    // This is a comment
+    let x = 42; // inline comment
+    println!("Hello");
+}"#;
+        
+        let formatted = strategy.apply_comment_italic(code);
+        
+        // Check that comments are wrapped in [ITALIC] tags
+        assert!(formatted.contains("[ITALIC]// This is a comment[/ITALIC]"));
+        assert!(formatted.contains("[ITALIC]// inline comment[/ITALIC]"));
+        
+        // Check that non-comment code is not affected
+        assert!(formatted.contains("fn main()"));
+        assert!(formatted.contains("let x = 42;"));
+    }
+
+    #[test]
+    fn test_format_code_includes_italic_comments() {
+        let strategy = RustStrategy::new();
+        let code = r#"// Comment at start
+fn main() {
+    let x = 42; // inline comment
+}"#;
+        
+        let result = strategy.format_code(code);
+        assert!(result.is_ok());
+        
+        let formatted = result.unwrap();
+        // Should have both bold keywords and italic comments
+        assert!(formatted.contains("[BOLD]fn[/BOLD]"));
+        assert!(formatted.contains("[BOLD]let[/BOLD]"));
+        assert!(formatted.contains("[ITALIC]// Comment at start[/ITALIC]"));
+        assert!(formatted.contains("[ITALIC]// inline comment[/ITALIC]"));
+    }
+
+    #[test]
+    fn test_process_with_formatting_includes_italic_comments() {
+        let strategy = RustStrategy::new();
+        let config = ProcessingConfig::default()
+            .with_syntax_validation(true)
+            .with_formatting(true);
+        
+        let code = r#"// This is a comment
+fn main() {
+    let x = 42; // inline comment
+}"#;
+        
+        let result = strategy.process(code, &config);
+        assert!(result.is_ok());
+        
+        let processed = result.unwrap();
+        assert!(processed.processed_code.is_some());
+        
+        let formatted = processed.processed_code.unwrap();
+        // Should have both bold keywords and italic comments
+        assert!(formatted.contains("[BOLD]fn[/BOLD]"));
+        assert!(formatted.contains("[BOLD]let[/BOLD]"));
+        assert!(formatted.contains("[ITALIC]// This is a comment[/ITALIC]"));
+        assert!(formatted.contains("[ITALIC]// inline comment[/ITALIC]"));
     }
 }
