@@ -47,7 +47,7 @@ impl RustStrategy {
             // Replace keyword with **keyword** for bold in markdown
             let pattern = format!(r"\b{}\b", regex::escape(keyword));
             let re = regex::Regex::new(&pattern).unwrap();
-            let replacement = format!("**{}**", keyword);
+            let replacement = format!("[BOLD]{}[/BOLD]", keyword);
             result = re.replace_all(&result, replacement.as_str()).to_string();
         }
         

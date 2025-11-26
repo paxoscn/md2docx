@@ -29,3 +29,7 @@ cargo build
 # 生产构建
 cargo build --release
 ```
+
+---
+
+默认不要在code block中支持Markdown语法

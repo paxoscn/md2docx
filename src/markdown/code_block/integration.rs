@@ -240,17 +240,17 @@ mod tests {
     #[test]
     fn test_processor_creation() {
         let processor = CodeBlockProcessor::new();
-        assert!(processor.get_config().is_processing_enabled());
+        assert!(!processor.get_config().is_processing_enabled()); // Default is now disabled
         assert!(processor.get_registry().strategy_count() > 0 || processor.get_registry().strategy_count() == 0);
     }
 
     #[test]
     fn test_processor_with_config() {
         let mut config = CodeBlockConfig::new();
-        config.global.enable_processing = false;
+        config.global.enable_processing = true; // Explicitly enable for this test
         
         let processor = CodeBlockProcessor::with_config(config);
-        assert!(!processor.get_config().is_processing_enabled());
+        assert!(processor.get_config().is_processing_enabled());
     }
 
     #[test]
@@ -299,7 +299,7 @@ mod tests {
         let processor = CodeBlockProcessor::new();
         let stats = processor.get_processing_stats();
         
-        assert!(stats.processing_enabled);
+        assert!(!stats.processing_enabled); // Default is now disabled
         // Check that we have a reasonable number of strategies
         assert!(!stats.registered_aliases.is_empty()); // Should have common aliases
     }
@@ -336,13 +336,13 @@ mod tests {
     #[test]
     fn test_update_config() {
         let mut processor = CodeBlockProcessor::new();
-        assert!(processor.get_config().is_processing_enabled());
+        assert!(!processor.get_config().is_processing_enabled()); // Default is now disabled
         
         let mut new_config = CodeBlockConfig::new();
-        new_config.global.enable_processing = false;
+        new_config.global.enable_processing = true; // Enable processing
         
         processor.update_config(new_config);
-        assert!(!processor.get_config().is_processing_enabled());
+        assert!(processor.get_config().is_processing_enabled());
     }
 
     #[test]

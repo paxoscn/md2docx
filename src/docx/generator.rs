@@ -1095,9 +1095,8 @@ impl DocxGenerator {
         }
         let text_without_leading_spaces = &text[leading_spaces.len()..];
         
-        // Parse inline formatting only (bold, italic, etc.) without treating # as heading
-        // We'll use a simple inline parser instead of full Markdown parser
-        let inline_elements = self.parse_inline_formatting(text_without_leading_spaces);
+        // Parse inline formatting including [BOLD] tags
+        let inline_elements = self.parse_inline_formatting_with_tags(text_without_leading_spaces);
 
         let mut paragraph = Paragraph::new().style("CodeBlock");
 
@@ -1126,73 +1125,130 @@ impl DocxGenerator {
         let mut current_text = String::new();
         let mut chars = text.chars().peekable();
         
-        while let Some(ch) = chars.next() {
-            if ch == '*' {
-                // Check for bold (**) or italic (*)
-                if chars.peek() == Some(&'*') {
-                    // Bold: **text**
-                    chars.next(); // consume second *
+        elements.push(crate::markdown::InlineElement::Text(text.to_string()));
+
+        /// Disabled Markdown
+        // while let Some(ch) = chars.next() {
+        //     if ch == '*' {
+        //         // Check for bold (**) or italic (*)
+        //         if chars.peek() == Some(&'*') {
+        //             // Bold: **text**
+        //             chars.next(); // consume second *
                     
-                    // Save current text if any
-                    if !current_text.is_empty() {
-                        elements.push(crate::markdown::InlineElement::Text(current_text.clone()));
-                        current_text.clear();
-                    }
+        //             // Save current text if any
+        //             if !current_text.is_empty() {
+        //                 elements.push(crate::markdown::InlineElement::Text(current_text.clone()));
+        //                 current_text.clear();
+        //             }
                     
-                    // Collect bold text
-                    let mut bold_text = String::new();
-                    let mut found_end = false;
-                    while let Some(ch) = chars.next() {
-                        if ch == '*' && chars.peek() == Some(&'*') {
-                            chars.next(); // consume second *
-                            found_end = true;
-                            break;
-                        }
-                        bold_text.push(ch);
-                    }
+        //             // Collect bold text
+        //             let mut bold_text = String::new();
+        //             let mut found_end = false;
+        //             while let Some(ch) = chars.next() {
+        //                 if ch == '*' && chars.peek() == Some(&'*') {
+        //                     chars.next(); // consume second *
+        //                     found_end = true;
+        //                     break;
+        //                 }
+        //                 bold_text.push(ch);
+        //             }
                     
-                    if found_end && !bold_text.is_empty() {
-                        elements.push(crate::markdown::InlineElement::Bold(bold_text));
-                    } else {
-                        // If no closing **, treat as literal text
-                        current_text.push_str("**");
-                        current_text.push_str(&bold_text);
-                    }
+        //             if found_end && !bold_text.is_empty() {
+        //                 elements.push(crate::markdown::InlineElement::Bold(bold_text));
+        //             } else {
+        //                 // If no closing **, treat as literal text
+        //                 current_text.push_str("**");
+        //                 current_text.push_str(&bold_text);
+        //             }
+        //         } else {
+        //             // Italic: *text*
+        //             // Save current text if any
+        //             if !current_text.is_empty() {
+        //                 elements.push(crate::markdown::InlineElement::Text(current_text.clone()));
+        //                 current_text.clear();
+        //             }
+                    
+        //             // Collect italic text
+        //             let mut italic_text = String::new();
+        //             let mut found_end = false;
+        //             while let Some(ch) = chars.next() {
+        //                 if ch == '*' {
+        //                     found_end = true;
+        //                     break;
+        //                 }
+        //                 italic_text.push(ch);
+        //             }
+                    
+        //             if found_end && !italic_text.is_empty() {
+        //                 elements.push(crate::markdown::InlineElement::Italic(italic_text));
+        //             } else {
+        //                 // If no closing *, treat as literal text
+        //                 current_text.push('*');
+        //                 current_text.push_str(&italic_text);
+        //             }
+        //         }
+        //     } else {
+        //         current_text.push(ch);
+        //     }
+        // }
+        
+        // // Add remaining text
+        // if !current_text.is_empty() {
+        //     elements.push(crate::markdown::InlineElement::Text(current_text));
+        // }
+        
+        // // If no elements were parsed, return the original text
+        // if elements.is_empty() {
+        //     elements.push(crate::markdown::InlineElement::Text(text.to_string()));
+        // }
+        
+        elements
+    }
+
+    /// Parse inline formatting including [BOLD] tags
+    fn parse_inline_formatting_with_tags(&self, text: &str) -> Vec<crate::markdown::InlineElement> {
+        let mut elements = Vec::new();
+        let mut current_pos = 0;
+        
+        while current_pos < text.len() {
+            // Look for [BOLD] tag
+            if let Some(bold_start) = text[current_pos..].find("[BOLD]") {
+                let absolute_bold_start = current_pos + bold_start;
+                
+                // Add text before [BOLD] tag
+                if bold_start > 0 {
+                    elements.push(crate::markdown::InlineElement::Text(
+                        text[current_pos..absolute_bold_start].to_string()
+                    ));
+                }
+                
+                // Look for [/BOLD] tag
+                let search_start = absolute_bold_start + 6; // length of "[BOLD]"
+                if let Some(bold_end) = text[search_start..].find("[/BOLD]") {
+                    let absolute_bold_end = search_start + bold_end;
+                    
+                    // Extract bold content
+                    let bold_content = &text[search_start..absolute_bold_end];
+                    elements.push(crate::markdown::InlineElement::Bold(bold_content.to_string()));
+                    
+                    // Move position past [/BOLD]
+                    current_pos = absolute_bold_end + 7; // length of "[/BOLD]"
                 } else {
-                    // Italic: *text*
-                    // Save current text if any
-                    if !current_text.is_empty() {
-                        elements.push(crate::markdown::InlineElement::Text(current_text.clone()));
-                        current_text.clear();
-                    }
-                    
-                    // Collect italic text
-                    let mut italic_text = String::new();
-                    let mut found_end = false;
-                    while let Some(ch) = chars.next() {
-                        if ch == '*' {
-                            found_end = true;
-                            break;
-                        }
-                        italic_text.push(ch);
-                    }
-                    
-                    if found_end && !italic_text.is_empty() {
-                        elements.push(crate::markdown::InlineElement::Italic(italic_text));
-                    } else {
-                        // If no closing *, treat as literal text
-                        current_text.push('*');
-                        current_text.push_str(&italic_text);
-                    }
+                    // No closing tag found, treat [BOLD] as literal text
+                    elements.push(crate::markdown::InlineElement::Text(
+                        text[absolute_bold_start..absolute_bold_start + 6].to_string()
+                    ));
+                    current_pos = absolute_bold_start + 6;
                 }
             } else {
-                current_text.push(ch);
+                // No more [BOLD] tags, add remaining text
+                if current_pos < text.len() {
+                    elements.push(crate::markdown::InlineElement::Text(
+                        text[current_pos..].to_string()
+                    ));
+                }
+                break;
             }
-        }
-        
-        // Add remaining text
-        if !current_text.is_empty() {
-            elements.push(crate::markdown::InlineElement::Text(current_text));
         }
         
         // If no elements were parsed, return the original text
@@ -2879,6 +2935,96 @@ mod tests {
     }
 
     #[test]
+    fn test_code_block_with_bold_tags() {
+        let config = create_test_config();
+        let mut generator = DocxGenerator::new(config);
+
+        // Test code block with [BOLD] tags
+        let code_with_bold_tags = "This is [BOLD]bold text[/BOLD] and normal text.\nAnother [BOLD]bold section[/BOLD] here.";
+
+        let mut document = MarkdownDocument::new();
+        document.add_element(MarkdownElement::CodeBlock {
+            language: Some("text".to_string()),
+            code: code_with_bold_tags.to_string(),
+            processed: None,
+        });
+
+        let result = generator.generate(&document);
+        assert!(result.is_ok());
+
+        let docx_bytes = result.unwrap();
+        assert!(!docx_bytes.is_empty());
+
+        // Test the parsing directly
+        let elements = generator.parse_inline_formatting_with_tags("This is [BOLD]bold[/BOLD] text");
+        assert_eq!(elements.len(), 3);
+        
+        match &elements[0] {
+            crate::markdown::InlineElement::Text(t) => assert_eq!(t, "This is "),
+            _ => panic!("Expected Text element"),
+        }
+        
+        match &elements[1] {
+            crate::markdown::InlineElement::Bold(t) => assert_eq!(t, "bold"),
+            _ => panic!("Expected Bold element"),
+        }
+        
+        match &elements[2] {
+            crate::markdown::InlineElement::Text(t) => assert_eq!(t, " text"),
+            _ => panic!("Expected Text element"),
+        }
+    }
+
+    #[test]
+    fn test_parse_inline_formatting_with_tags_multiple_bold() {
+        let config = create_test_config();
+        let generator = DocxGenerator::new(config);
+
+        // Test multiple [BOLD] tags
+        let text = "[BOLD]First[/BOLD] and [BOLD]Second[/BOLD]";
+        let elements = generator.parse_inline_formatting_with_tags(text);
+        
+        assert_eq!(elements.len(), 3);
+        match &elements[0] {
+            crate::markdown::InlineElement::Bold(t) => assert_eq!(t, "First"),
+            _ => panic!("Expected Bold element"),
+        }
+        match &elements[1] {
+            crate::markdown::InlineElement::Text(t) => assert_eq!(t, " and "),
+            _ => panic!("Expected Text element"),
+        }
+        match &elements[2] {
+            crate::markdown::InlineElement::Bold(t) => assert_eq!(t, "Second"),
+            _ => panic!("Expected Bold element"),
+        }
+    }
+
+    #[test]
+    fn test_parse_inline_formatting_with_tags_unclosed() {
+        let config = create_test_config();
+        let generator = DocxGenerator::new(config);
+
+        // Test unclosed [BOLD] tag
+        let text = "This is [BOLD]unclosed bold";
+        let elements = generator.parse_inline_formatting_with_tags(text);
+        
+        // Should treat [BOLD] as literal text when no closing tag, plus remaining text
+        assert_eq!(elements.len(), 3);
+        match &elements[0] {
+            crate::markdown::InlineElement::Text(t) => assert_eq!(t, "This is "),
+            _ => panic!("Expected Text element"),
+        }
+        match &elements[1] {
+            crate::markdown::InlineElement::Text(t) => assert_eq!(t, "[BOLD]"),
+            _ => panic!("Expected Text element"),
+        }
+        match &elements[2] {
+            crate::markdown::InlineElement::Text(t) => assert_eq!(t, "unclosed bold"),
+            _ => panic!("Expected Text element"),
+        }
+    }
+
+    #[test]
     fn test_contains_markdown_formatting() {
         let config = create_test_config();
         let generator = DocxGenerator::new(config);
@@ -3250,17 +3396,10 @@ mod tests {
         let text = "This is **bold** text";
         let elements = generator.parse_inline_formatting(text);
         
-        assert_eq!(elements.len(), 3);
+        // Since Markdown is disabled by default, it returns the text as-is
+        assert_eq!(elements.len(), 1);
         match &elements[0] {
-            crate::markdown::InlineElement::Text(t) => assert_eq!(t, "This is "),
-            _ => panic!("Expected Text element"),
-        }
-        match &elements[1] {
-            crate::markdown::InlineElement::Bold(t) => assert_eq!(t, "bold"),
-            _ => panic!("Expected Bold element"),
-        }
-        match &elements[2] {
-            crate::markdown::InlineElement::Text(t) => assert_eq!(t, " text"),
+            crate::markdown::InlineElement::Text(t) => assert_eq!(t, "This is **bold** text"),
             _ => panic!("Expected Text element"),
         }
     }
@@ -3273,17 +3412,10 @@ mod tests {
         let text = "This is *italic* text";
         let elements = generator.parse_inline_formatting(text);
         
-        assert_eq!(elements.len(), 3);
+        // Since Markdown is disabled by default, it returns the text as-is
+        assert_eq!(elements.len(), 1);
         match &elements[0] {
-            crate::markdown::InlineElement::Text(t) => assert_eq!(t, "This is "),
-            _ => panic!("Expected Text element"),
-        }
-        match &elements[1] {
-            crate::markdown::InlineElement::Italic(t) => assert_eq!(t, "italic"),
-            _ => panic!("Expected Italic element"),
-        }
-        match &elements[2] {
-            crate::markdown::InlineElement::Text(t) => assert_eq!(t, " text"),
+            crate::markdown::InlineElement::Text(t) => assert_eq!(t, "This is *italic* text"),
             _ => panic!("Expected Text element"),
         }
     }
@@ -3296,23 +3428,11 @@ mod tests {
         let text = "# Comment with **bold** and *italic*";
         let elements = generator.parse_inline_formatting(text);
         
-        // Should have: "# Comment with ", Bold("bold"), " and ", Italic("italic")
-        assert_eq!(elements.len(), 4);
+        // Since Markdown is disabled by default, it returns the text as-is
+        assert_eq!(elements.len(), 1);
         match &elements[0] {
-            crate::markdown::InlineElement::Text(t) => assert_eq!(t, "# Comment with "),
+            crate::markdown::InlineElement::Text(t) => assert_eq!(t, "# Comment with **bold** and *italic*"),
             _ => panic!("Expected Text element"),
-        }
-        match &elements[1] {
-            crate::markdown::InlineElement::Bold(t) => assert_eq!(t, "bold"),
-            _ => panic!("Expected Bold element"),
-        }
-        match &elements[2] {
-            crate::markdown::InlineElement::Text(t) => assert_eq!(t, " and "),
-            _ => panic!("Expected Text element"),
-        }
-        match &elements[3] {
-            crate::markdown::InlineElement::Italic(t) => assert_eq!(t, "italic"),
-            _ => panic!("Expected Italic element"),
         }
     }
 

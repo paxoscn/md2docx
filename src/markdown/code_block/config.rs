@@ -58,7 +58,7 @@ impl Default for ProcessingConfig {
 impl Default for GlobalConfig {
     fn default() -> Self {
         Self {
-            enable_processing: true,
+            enable_processing: false,
             default_timeout_ms: 5000,
             max_cache_size: 1000,
             enable_parallel_processing: false,
