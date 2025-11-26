@@ -783,10 +783,11 @@ impl DocxGenerator {
                 let cell_paragraph = Paragraph::new().add_run(header_run);
                 let mut cell = TableCell::new().add_paragraph(cell_paragraph);
                 
-                // Set cell width based on content
-                if let Some(&width) = column_widths.get(index) {
-                    cell = cell.width(width, WidthType::Dxa);
-                }
+                /// Commented
+                // // Set cell width based on content
+                // if let Some(&width) = column_widths.get(index) {
+                //     cell = cell.width(width, WidthType::Dxa);
+                // }
                 
                 header_cells.push(cell);
             }
@@ -818,10 +819,11 @@ impl DocxGenerator {
                 let cell_paragraph = Paragraph::new().add_run(cell_run);
                 let mut cell = TableCell::new().add_paragraph(cell_paragraph);
                 
-                // Set cell width based on content
-                if let Some(&width) = column_widths.get(index) {
-                    cell = cell.width(width, WidthType::Dxa);
-                }
+                /// Commented
+                // // Set cell width based on content
+                // if let Some(&width) = column_widths.get(index) {
+                //     cell = cell.width(width, WidthType::Dxa);
+                // }
                 
                 row_cells.push(cell);
             }
@@ -831,14 +833,14 @@ impl DocxGenerator {
 
         // Create table with auto-layout for better content fitting
         let mut table = Table::new(table_rows)
-            .layout(TableLayoutType::Autofit);
+            .layout(TableLayoutType::Fixed);
 
         // Apply table borders if configured
         if table_style.border_width > 0.0 {
             table = self.apply_table_borders(table, table_style.border_width)?;
         }
 
-        docx = docx.add_table(table);
+        docx = docx.add_table(table.width(8300, WidthType::Dxa));
         Ok(docx)
     }
 
