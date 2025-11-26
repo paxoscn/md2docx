@@ -1247,7 +1247,10 @@ impl DocxGenerator {
                     if is_bold {
                         elements.push(crate::markdown::InlineElement::Bold(content.to_string()));
                     } else {
-                        elements.push(crate::markdown::InlineElement::Italic(content.to_string()));
+                        elements.push(crate::markdown::InlineElement::Italic(
+                            content.to_string()
+                            .replace("[BOLD]", "")
+                            .replace("[/BOLD]", "")));
                     }
                     
                     // Move position past closing tag
