@@ -1095,11 +1095,9 @@ impl DocxGenerator {
         }
         let text_without_leading_spaces = &text[leading_spaces.len()..];
         
-        // Parse the text as Markdown
-        let parser = crate::markdown::MarkdownParser::new();
-        let document = parser.parse(text_without_leading_spaces).map_err(|e| {
-            ConversionError::DocxGeneration(format!("Failed to parse Markdown in code block: {}", e))
-        })?;
+        // Parse inline formatting only (bold, italic, etc.) without treating # as heading
+        // We'll use a simple inline parser instead of full Markdown parser
+        let inline_elements = self.parse_inline_formatting(text_without_leading_spaces);
 
         let mut paragraph = Paragraph::new().style("CodeBlock");
 
@@ -1108,45 +1106,9 @@ impl DocxGenerator {
             paragraph = paragraph.add_run(run);
         }
 
-        // Process the parsed elements
-        for element in &document.elements {
-            match element {
-                crate::markdown::MarkdownElement::Paragraph { content } => {
-                    // Add all inline elements from the paragraph
-                    for inline in content {
-                        let run = self.create_code_run_from_inline(inline, style)?;
-                        paragraph = paragraph.add_run(run);
-                    }
-                }
-                crate::markdown::MarkdownElement::Image { alt_text, url, title: _ } => {
-                    // Handle images in code blocks as placeholders
-                    let image_text = format!("[Image: {} - {}]", alt_text, url);
-                    let run = self.create_code_run(&image_text, style)?;
-                    paragraph = paragraph.add_run(run);
-                }
-                _ => {
-                    // For other elements, extract text and render as code
-                    let text_content = self.extract_text_from_element(element);
-                    if !text_content.is_empty() {
-                        let run = self.create_code_run(&text_content, style)?;
-                        paragraph = paragraph.add_run(run);
-                    }
-                }
-            }
-        }
-
-        // If no content was processed from Markdown, add the original text as fallback
-        // We'll track if we added any runs during processing
-        let mut has_content = false;
-        for element in &document.elements {
-            if !matches!(element, crate::markdown::MarkdownElement::Paragraph { content } if content.is_empty()) {
-                has_content = true;
-                break;
-            }
-        }
-        
-        if !has_content {
-            let run = self.create_code_run(text, style)?;
+        // Process the inline elements
+        for inline in inline_elements {
+            let run = self.create_code_run_from_inline(&inline, style)?;
             paragraph = paragraph.add_run(run);
         }
 
@@ -1155,6 +1117,90 @@ impl DocxGenerator {
         paragraph = paragraph.line_spacing(LineSpacing::new().line(line_spacing_value));
 
         Ok(paragraph)
+    }
+
+    /// Parse inline formatting (bold, italic) without treating # as heading
+    /// This is a simple parser that only handles ** and * for bold/italic
+    fn parse_inline_formatting(&self, text: &str) -> Vec<crate::markdown::InlineElement> {
+        let mut elements = Vec::new();
+        let mut current_text = String::new();
+        let mut chars = text.chars().peekable();
+        
+        while let Some(ch) = chars.next() {
+            if ch == '*' {
+                // Check for bold (**) or italic (*)
+                if chars.peek() == Some(&'*') {
+                    // Bold: **text**
+                    chars.next(); // consume second *
+                    
+                    // Save current text if any
+                    if !current_text.is_empty() {
+                        elements.push(crate::markdown::InlineElement::Text(current_text.clone()));
+                        current_text.clear();
+                    }
+                    
+                    // Collect bold text
+                    let mut bold_text = String::new();
+                    let mut found_end = false;
+                    while let Some(ch) = chars.next() {
+                        if ch == '*' && chars.peek() == Some(&'*') {
+                            chars.next(); // consume second *
+                            found_end = true;
+                            break;
+                        }
+                        bold_text.push(ch);
+                    }
+                    
+                    if found_end && !bold_text.is_empty() {
+                        elements.push(crate::markdown::InlineElement::Bold(bold_text));
+                    } else {
+                        // If no closing **, treat as literal text
+                        current_text.push_str("**");
+                        current_text.push_str(&bold_text);
+                    }
+                } else {
+                    // Italic: *text*
+                    // Save current text if any
+                    if !current_text.is_empty() {
+                        elements.push(crate::markdown::InlineElement::Text(current_text.clone()));
+                        current_text.clear();
+                    }
+                    
+                    // Collect italic text
+                    let mut italic_text = String::new();
+                    let mut found_end = false;
+                    while let Some(ch) = chars.next() {
+                        if ch == '*' {
+                            found_end = true;
+                            break;
+                        }
+                        italic_text.push(ch);
+                    }
+                    
+                    if found_end && !italic_text.is_empty() {
+                        elements.push(crate::markdown::InlineElement::Italic(italic_text));
+                    } else {
+                        // If no closing *, treat as literal text
+                        current_text.push('*');
+                        current_text.push_str(&italic_text);
+                    }
+                }
+            } else {
+                current_text.push(ch);
+            }
+        }
+        
+        // Add remaining text
+        if !current_text.is_empty() {
+            elements.push(crate::markdown::InlineElement::Text(current_text));
+        }
+        
+        // If no elements were parsed, return the original text
+        if elements.is_empty() {
+            elements.push(crate::markdown::InlineElement::Text(text.to_string()));
+        }
+        
+        elements
     }
 
     /// Create a code run from an inline element with code styling
@@ -3177,5 +3223,148 @@ mod tests {
 
         let docx_bytes = result.unwrap();
         assert!(!docx_bytes.is_empty());
+    }
+
+    #[test]
+    fn test_parse_inline_formatting_plain_text() {
+        let config = create_test_config();
+        let generator = DocxGenerator::new(config);
+        
+        let text = "# This is a comment";
+        let elements = generator.parse_inline_formatting(text);
+        
+        assert_eq!(elements.len(), 1);
+        match &elements[0] {
+            crate::markdown::InlineElement::Text(t) => {
+                assert_eq!(t, "# This is a comment");
+            }
+            _ => panic!("Expected Text element"),
+        }
+    }
+
+    #[test]
+    fn test_parse_inline_formatting_bold() {
+        let config = create_test_config();
+        let generator = DocxGenerator::new(config);
+        
+        let text = "This is **bold** text";
+        let elements = generator.parse_inline_formatting(text);
+        
+        assert_eq!(elements.len(), 3);
+        match &elements[0] {
+            crate::markdown::InlineElement::Text(t) => assert_eq!(t, "This is "),
+            _ => panic!("Expected Text element"),
+        }
+        match &elements[1] {
+            crate::markdown::InlineElement::Bold(t) => assert_eq!(t, "bold"),
+            _ => panic!("Expected Bold element"),
+        }
+        match &elements[2] {
+            crate::markdown::InlineElement::Text(t) => assert_eq!(t, " text"),
+            _ => panic!("Expected Text element"),
+        }
+    }
+
+    #[test]
+    fn test_parse_inline_formatting_italic() {
+        let config = create_test_config();
+        let generator = DocxGenerator::new(config);
+        
+        let text = "This is *italic* text";
+        let elements = generator.parse_inline_formatting(text);
+        
+        assert_eq!(elements.len(), 3);
+        match &elements[0] {
+            crate::markdown::InlineElement::Text(t) => assert_eq!(t, "This is "),
+            _ => panic!("Expected Text element"),
+        }
+        match &elements[1] {
+            crate::markdown::InlineElement::Italic(t) => assert_eq!(t, "italic"),
+            _ => panic!("Expected Italic element"),
+        }
+        match &elements[2] {
+            crate::markdown::InlineElement::Text(t) => assert_eq!(t, " text"),
+            _ => panic!("Expected Text element"),
+        }
+    }
+
+    #[test]
+    fn test_parse_inline_formatting_mixed() {
+        let config = create_test_config();
+        let generator = DocxGenerator::new(config);
+        
+        let text = "# Comment with **bold** and *italic*";
+        let elements = generator.parse_inline_formatting(text);
+        
+        // Should have: "# Comment with ", Bold("bold"), " and ", Italic("italic")
+        assert_eq!(elements.len(), 4);
+        match &elements[0] {
+            crate::markdown::InlineElement::Text(t) => assert_eq!(t, "# Comment with "),
+            _ => panic!("Expected Text element"),
+        }
+        match &elements[1] {
+            crate::markdown::InlineElement::Bold(t) => assert_eq!(t, "bold"),
+            _ => panic!("Expected Bold element"),
+        }
+        match &elements[2] {
+            crate::markdown::InlineElement::Text(t) => assert_eq!(t, " and "),
+            _ => panic!("Expected Text element"),
+        }
+        match &elements[3] {
+            crate::markdown::InlineElement::Italic(t) => assert_eq!(t, "italic"),
+            _ => panic!("Expected Italic element"),
+        }
+    }
+
+    #[test]
+    fn test_parse_inline_formatting_unclosed_markers() {
+        let config = create_test_config();
+        let generator = DocxGenerator::new(config);
+        
+        // Unclosed bold marker - should be treated as literal text
+        let text = "This is **bold without closing";
+        let elements = generator.parse_inline_formatting(text);
+        
+        // The parser will try to find closing ** and fail, so it treats ** as literal
+        // Result: "This is ", "**bold without closing"
+        assert!(elements.len() >= 1);
+        
+        // Check that the text contains the original content
+        let combined_text: String = elements.iter().map(|e| match e {
+            crate::markdown::InlineElement::Text(t) => t.clone(),
+            crate::markdown::InlineElement::Bold(t) => format!("**{}**", t),
+            crate::markdown::InlineElement::Italic(t) => format!("*{}*", t),
+            _ => String::new(),
+        }).collect();
+        
+        assert!(combined_text.contains("**bold without closing") || combined_text == text);
+    }
+
+    #[test]
+    fn test_code_block_with_hash_comments() {
+        let config = create_test_config();
+        let mut generator = DocxGenerator::new(config);
+
+        let code_with_hash = "# This is a comment\necho \"Hello\"\n# Another comment\ncargo build";
+
+        let mut document = MarkdownDocument::new();
+        document.add_element(MarkdownElement::CodeBlock {
+            language: Some("bash".to_string()),
+            code: code_with_hash.to_string(),
+            processed: None,
+        });
+
+        let result = generator.generate(&document);
+        assert!(result.is_ok());
+
+        let docx_bytes = result.unwrap();
+        assert!(!docx_bytes.is_empty());
+        
+        // Verify that the code block cell can be created with hash comments
+        let cell_result = generator.create_code_block_cell_with_markdown(
+            code_with_hash,
+            &generator.config.styles.code_block
+        );
+        assert!(cell_result.is_ok());
     }
 }
