@@ -761,6 +761,9 @@ impl DocxGenerator {
         let column_widths = self.calculate_column_widths(headers, rows);
         let mut table_rows = vec![];
 
+        let table_width = 8300;
+        let total_column_width: usize = column_widths.iter().sum();
+
         // Add header row
         if !headers.is_empty() {
             let mut header_cells = vec![];
@@ -785,11 +788,11 @@ impl DocxGenerator {
                 let cell_paragraph = Paragraph::new().add_run(header_run);
                 let mut cell = TableCell::new().add_paragraph(cell_paragraph);
                 
-                /// Commented
-                // // Set cell width based on content
-                // if let Some(&width) = column_widths.get(index) {
-                //     cell = cell.width(width, WidthType::Dxa);
-                // }
+                // Set cell width based on content
+                if let Some(&width) = column_widths.get(index) {
+                    // cell = cell.width(width, WidthType::Dxa);
+                    cell = cell.width(((table_width * width) as f32 * 1.0 / total_column_width as f32) as usize, WidthType::Dxa);
+                }
                 
                 header_cells.push(cell);
             }
@@ -821,11 +824,11 @@ impl DocxGenerator {
                 let cell_paragraph = Paragraph::new().add_run(cell_run);
                 let mut cell = TableCell::new().add_paragraph(cell_paragraph);
                 
-                /// Commented
-                // // Set cell width based on content
-                // if let Some(&width) = column_widths.get(index) {
-                //     cell = cell.width(width, WidthType::Dxa);
-                // }
+                // Set cell width based on content
+                if let Some(&width) = column_widths.get(index) {
+                    // cell = cell.width(width, WidthType::Dxa);
+                    cell = cell.width(((table_width * width) as f32 * 1.0 / total_column_width as f32) as usize, WidthType::Dxa);
+                }
                 
                 row_cells.push(cell);
             }
@@ -842,7 +845,7 @@ impl DocxGenerator {
             table = self.apply_table_borders(table, table_style.border_width)?;
         }
 
-        docx = docx.add_table(table.width(8300, WidthType::Dxa));
+        docx = docx.add_table(table.width(table_width, WidthType::Dxa));
         Ok(docx)
     }
 
