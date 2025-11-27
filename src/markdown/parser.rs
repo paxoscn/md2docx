@@ -216,17 +216,22 @@ impl MarkdownParser {
                     *index += 1;
                     let alt_text = self.collect_text_until_end(events, index, "Image")?;
                     
+                    // Parse URL to extract width and height parameters
+                    let (clean_url, width, height) = Self::parse_image_url_params(&url);
+                    
                     // Store the image element for potential standalone use
                     image_element = Some(MarkdownElement::Image {
                         alt_text: alt_text.clone(),
-                        url: url.clone(),
+                        url: clean_url.clone(),
                         title: title_str.clone(),
+                        width,
+                        height,
                     });
                     
                     // Also add as inline element in case it's not standalone
                     elements.push(InlineElement::Link {
                         text: format!("[Image: {}]", alt_text),
-                        url,
+                        url: clean_url,
                         title: title_str,
                     });
                 },
@@ -504,6 +509,44 @@ impl MarkdownParser {
         let url_lower = url.to_lowercase();
         
         supported_extensions.iter().any(|ext| url_lower.ends_with(ext))
+    }
+
+    /// Parse image URL and extract query parameters (width, height)
+    /// Returns (clean_url, width, height)
+    fn parse_image_url_params(url: &str) -> (String, Option<u32>, Option<u32>) {
+        if let Some(question_mark_pos) = url.find('?') {
+            let clean_url = url[..question_mark_pos].to_string();
+            let query_string = &url[question_mark_pos + 1..];
+            
+            let mut width = None;
+            let mut height = None;
+            
+            // Parse query parameters
+            for param in query_string.split('&') {
+                if let Some(eq_pos) = param.find('=') {
+                    let key = &param[..eq_pos];
+                    let value = &param[eq_pos + 1..];
+                    
+                    match key {
+                        "width" => {
+                            if let Ok(w) = value.parse::<u32>() {
+                                width = Some(w);
+                            }
+                        }
+                        "height" => {
+                            if let Ok(h) = value.parse::<u32>() {
+                                height = Some(h);
+                            }
+                        }
+                        _ => {} // Ignore other parameters
+                    }
+                }
+            }
+            
+            (clean_url, width, height)
+        } else {
+            (url.to_string(), None, None)
+        }
     }
 
     /// Normalize whitespace by replacing multiple consecutive spaces with a single space
@@ -791,10 +834,12 @@ mod tests {
         
         assert_eq!(result.elements.len(), 1);
         match &result.elements[0] {
-            MarkdownElement::Image { alt_text, url, title } => {
+            MarkdownElement::Image { alt_text, url, title, width, height } => {
                 assert_eq!(alt_text, "Alt text");
                 assert_eq!(url, "https://example.com/image.jpg");
                 assert_eq!(title, &None);
+                assert_eq!(width, &None);
+                assert_eq!(height, &None);
             },
             _ => panic!("Expected image element"),
         }
@@ -807,10 +852,12 @@ mod tests {
         
         assert_eq!(result.elements.len(), 1);
         match &result.elements[0] {
-            MarkdownElement::Image { alt_text, url, title } => {
+            MarkdownElement::Image { alt_text, url, title, width, height } => {
                 assert_eq!(alt_text, "Alt text");
                 assert_eq!(url, "https://example.com/image.jpg");
                 assert_eq!(title, &Some("Image Title".to_string()));
+                assert_eq!(width, &None);
+                assert_eq!(height, &None);
             },
             _ => panic!("Expected image element"),
         }
@@ -823,10 +870,48 @@ mod tests {
         
         assert_eq!(result.elements.len(), 1);
         match &result.elements[0] {
-            MarkdownElement::Image { alt_text, url, title } => {
+            MarkdownElement::Image { alt_text, url, title, width, height } => {
                 assert_eq!(alt_text, "Local image");
                 assert_eq!(url, "./images/local.png");
                 assert_eq!(title, &None);
+                assert_eq!(width, &None);
+                assert_eq!(height, &None);
+            },
+            _ => panic!("Expected image element"),
+        }
+    }
+
+    #[test]
+    fn test_parse_image_with_size_params() {
+        let parser = MarkdownParser::new();
+        let result = parser.parse("![img](img/llm-no-agent.png?width=100&height=50)").unwrap();
+        
+        assert_eq!(result.elements.len(), 1);
+        match &result.elements[0] {
+            MarkdownElement::Image { alt_text, url, title, width, height } => {
+                assert_eq!(alt_text, "img");
+                assert_eq!(url, "img/llm-no-agent.png");
+                assert_eq!(title, &None);
+                assert_eq!(width, &Some(100));
+                assert_eq!(height, &Some(50));
+            },
+            _ => panic!("Expected image element"),
+        }
+    }
+
+    #[test]
+    fn test_parse_image_with_only_width() {
+        let parser = MarkdownParser::new();
+        let result = parser.parse("![img](img/test.png?width=200)").unwrap();
+        
+        assert_eq!(result.elements.len(), 1);
+        match &result.elements[0] {
+            MarkdownElement::Image { alt_text, url, title, width, height } => {
+                assert_eq!(alt_text, "img");
+                assert_eq!(url, "img/test.png");
+                assert_eq!(title, &None);
+                assert_eq!(width, &Some(200));
+                assert_eq!(height, &None);
             },
             _ => panic!("Expected image element"),
         }

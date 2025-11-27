@@ -167,8 +167,10 @@ impl DocxGenerator {
                 alt_text,
                 url,
                 title: _,
+                width,
+                height,
             } => {
-                docx = self.add_image(docx, alt_text, url)?;
+                docx = self.add_image(docx, alt_text, url, *width, *height)?;
             }
             MarkdownElement::HorizontalRule => {
                 docx = self.add_horizontal_rule(docx)?;
@@ -608,7 +610,7 @@ impl DocxGenerator {
         
         // Set cell width and styling
         left_cell = left_cell
-            .width(6500, WidthType::Dxa)
+            .width(6800, WidthType::Dxa)
             .vertical_align(docx_rs::VAlignType::Top);
 
         // Create right cell for icon
@@ -634,7 +636,7 @@ impl DocxGenerator {
                 .align(AlignmentType::Right);
             docx = docx.add_style(right_style);
 
-            match self.embed_local_image_sized(icon_path.as_str(), "", 105, 70, &ImageConfig { max_width: 1500.0, max_height: 1000.0, }) {
+            match self.embed_local_image_sized(icon_path.as_str(), "", 90, 60, &ImageConfig { max_width: 1500.0, max_height: 1000.0, }) {
                 Ok(image_run) => {
                     let paragraph = Paragraph::new().add_run(image_run);
                     right_cell = right_cell.add_paragraph(paragraph.style("Right"));
@@ -646,7 +648,7 @@ impl DocxGenerator {
         }
         
         right_cell = right_cell
-            .width(1800, WidthType::Dxa)
+            .width(1500, WidthType::Dxa)
             .vertical_align(docx_rs::VAlignType::Top);
 
         // Create table row with both cells
@@ -850,6 +852,8 @@ impl DocxGenerator {
         mut docx: Docx,
         alt_text: &str,
         url: &str,
+        width: Option<u32>,
+        height: Option<u32>,
     ) -> Result<Docx, ConversionError> {
         let image_config = &self.config.elements.image;
 
@@ -886,8 +890,18 @@ impl DocxGenerator {
 
         // Check if it's a local file path
         if self.is_local_image_path(url) {
-            // Try to embed local image
-            match self.embed_local_image(url, alt_text, image_config) {
+            // Try to embed local image with custom dimensions if provided
+            let result = if width.is_some() || height.is_some() {
+                // Use custom dimensions
+                let w = width.unwrap_or(image_config.max_width as u32);
+                let h = height.unwrap_or(image_config.max_height as u32);
+                self.embed_local_image_sized(url, alt_text, w, h, image_config)
+            } else {
+                // Use default dimensions from config
+                self.embed_local_image(url, alt_text, image_config)
+            };
+
+            match result {
                 Ok(image_run) => {
                     let paragraph = Paragraph::new().add_run(image_run);
                     docx = docx.add_paragraph(paragraph);
@@ -1916,6 +1930,8 @@ mod tests {
             alt_text: "Test Image".to_string(),
             url: "https://example.com/image.jpg".to_string(),
             title: Some("Image Title".to_string()),
+            width: None,
+            height: None,
         });
 
         let result = generator.generate(&document);
@@ -3211,6 +3227,8 @@ mod tests {
             alt_text: "Test Image".to_string(),
             url: "image.jpg".to_string(),
             title: None,
+            width: None,
+            height: None,
         };
         let text = generator.extract_text_from_element(&image);
         assert_eq!(text, "Test Image");

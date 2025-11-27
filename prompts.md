@@ -33,3 +33,11 @@ cargo build --release
 ---
 
 默认不要在code block中支持Markdown语法
+
+---
+
+若图片URL包含"?"则将后面的参数用在图片格式控制上, 例如对图片:
+
+![img](img/llm-no-agent.png?width=100&height=50)
+
+进行渲染时需要将图片的宽高设为100和50

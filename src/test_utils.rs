@@ -173,6 +173,8 @@ pub fn create_test_document() -> MarkdownDocument {
                 alt_text: "Test Image".to_string(),
                 url: "https://example.com/image.jpg".to_string(),
                 title: None,
+                width: None,
+                height: None,
             },
             MarkdownElement::HorizontalRule,
         ],

@@ -33,6 +33,8 @@ pub enum MarkdownElement {
         alt_text: String,
         url: String,
         title: Option<String>,
+        width: Option<u32>,
+        height: Option<u32>,
     },
     HorizontalRule,
 }
@@ -679,6 +681,8 @@ mod tests {
             alt_text: "A beautiful sunset".to_string(),
             url: "https://example.com/sunset.jpg".to_string(),
             title: Some("Sunset".to_string()),
+            width: None,
+            height: None,
         };
         
         assert_eq!(image.element_type(), "image");
