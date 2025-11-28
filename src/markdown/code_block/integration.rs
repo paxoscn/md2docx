@@ -151,6 +151,10 @@ impl CodeBlockProcessor {
         use crate::markdown::code_block::strategies::NoteStrategy;
         registry.register_strategy(std::sync::Arc::new(NoteStrategy::new()));
         
+        // Register the Bash strategy
+        use crate::markdown::code_block::strategies::BashStrategy;
+        registry.register_strategy(std::sync::Arc::new(BashStrategy::new()));
+        
         // Future strategies to register:
         // - JavaScriptStrategy  
         // - PythonStrategy

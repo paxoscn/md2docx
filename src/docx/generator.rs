@@ -680,7 +680,8 @@ impl DocxGenerator {
             let content_start = start_pos + start_marker.len();
             if let Some(end_pos) = text[content_start..].find(end_marker) {
                 let content = &text[content_start..content_start + end_pos];
-                return Some(content.trim().to_string());
+                // return Some(content.trim().to_string());
+                return Some(content.to_string());
             }
         }
         None
